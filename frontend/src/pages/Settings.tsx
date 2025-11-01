@@ -5,8 +5,11 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Progress } from '../components/ui/progress';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAppLogging } from '../contexts/AppLoggingContext';
+import { useModelOperations } from '../contexts/ModelOperationContext';
 import { 
   Settings as SettingsIcon, 
   Server, 
@@ -37,9 +40,10 @@ interface Model {
 const Settings: React.FC = () => {
   const { addNotification } = useNotifications();
   const { addLog } = useAppLogging();
+  const { addOperation, updateOperation, removeOperation } = useModelOperations();
   const [llmEndpoint, setLlmEndpoint] = useState('http://localhost:11434/api/generate');
   const [searchApiKey, setSearchApiKey] = useState('');
-  const [searchProvider, setSearchProvider] = useState('tavily');
+  const [searchProvider, setSearchProvider] = useState('duckduckgo');
   const [llmStatus, setLlmStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
   const [searchStatus, setSearchStatus] = useState<'unknown' | 'configured' | 'not_configured'>('unknown');
   
@@ -51,6 +55,14 @@ const Settings: React.FC = () => {
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [deletingModel, setDeletingModel] = useState<string | null>(null);
   const [serviceStatus, setServiceStatus] = useState<'running' | 'offline' | 'unknown'>('unknown');
+  
+  // Download progress state
+  const [downloadProgress, setDownloadProgress] = useState<{
+    percentage: number;
+    status: string;
+    speed?: string;
+    error?: string;
+  } | null>(null);
   
   useEffect(() => {
     checkSearchStatus();
@@ -135,43 +147,182 @@ const Settings: React.FC = () => {
   const handlePullModel = async () => {
     if (!newModelName.trim()) return;
     
+    const modelName = newModelName.trim();
     const operationId = addOperation({
       type: 'download',
-      model: newModelName,
+      model: modelName,
       status: 'pending',
-      message: `Starting download of ${newModelName}...`
+      message: `Starting download of ${modelName}...`
     });
 
-    setPullingModel(newModelName);
+    setPullingModel(modelName);
+    setDownloadProgress({
+      percentage: 0,
+      status: 'Initializing...',
+    });
+
     try {
       updateOperation(operationId, { status: 'in_progress', progress: 0 });
       
-      const response = await api.post('/models/pull', { model: newModelName });
-      if (response.data.success) {
-        updateOperation(operationId, { 
-          status: 'completed', 
-          progress: 100,
-          message: `Successfully downloaded ${newModelName}`
-        });
-        
-        setNewModelName('');
-        // Refresh models list after a delay to allow the pull to start
-        setTimeout(fetchModels, 2000);
-        setTimeout(() => removeOperation(operationId), 5000); // Remove after 5 seconds
-      } else {
-        updateOperation(operationId, { 
-          status: 'error',
-          message: `Failed to download ${newModelName}: ${response.data.message}`
-        });
-        setTimeout(() => removeOperation(operationId), 10000); // Remove after 10 seconds for errors
+      // Use fetch with streaming for Server-Sent Events (EventSource doesn't support POST)
+      const response = await fetch('/api/models/pull/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify({ model: modelName }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let lastDataTime = Date.now();
+
+      addNotification({
+        type: 'info',
+        message: `Started downloading model: ${modelName}`,
+      });
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          // Check if we ended unexpectedly without completion
+          const currentTime = Date.now();
+          if (currentTime - lastDataTime > 5000) { // 5 seconds since last data
+            console.warn('Stream ended unexpectedly - no data for 5+ seconds');
+            setDownloadProgress({
+              percentage: 0,
+              status: 'Download interrupted',
+              error: 'Download was interrupted. Please try again.'
+            });
+            setTimeout(() => setDownloadProgress(null), 10000);
+          }
+          break;
+        }
+
+        lastDataTime = Date.now();
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              switch (data.type) {
+                case 'status':
+                  setDownloadProgress(prev => prev ? {
+                    ...prev,
+                    status: data.message
+                  } : {
+                    percentage: 0,
+                    status: data.message
+                  });
+                  updateOperation(operationId, { 
+                    message: data.message 
+                  });
+                  break;
+                  
+                case 'progress':
+                  setDownloadProgress(prev => ({
+                    percentage: data.percentage,
+                    status: prev?.status || 'Downloading...',
+                    speed: data.speed
+                  }));
+                  updateOperation(operationId, { 
+                    progress: data.percentage,
+                    message: `Downloading... ${data.percentage.toFixed(1)}%`
+                  });
+                  break;
+                  
+                case 'complete':
+                  setDownloadProgress({
+                    percentage: 100,
+                    status: 'Download completed successfully!'
+                  });
+                  updateOperation(operationId, { 
+                    status: 'completed', 
+                    progress: 100,
+                    message: data.message
+                  });
+                  
+                  addNotification({
+                    type: 'success',
+                    message: `Successfully downloaded model: ${modelName}`,
+                  });
+                  
+                  setNewModelName('');
+                  setTimeout(() => {
+                    setDownloadProgress(null);
+                    fetchModels();
+                  }, 2000);
+                  setTimeout(() => removeOperation(operationId), 5000);
+                  return;
+                  
+                case 'error':
+                  setDownloadProgress({
+                    percentage: 0,
+                    status: 'Download failed',
+                    error: data.message
+                  });
+                  updateOperation(operationId, { 
+                    status: 'error',
+                    message: data.message
+                  });
+                  
+                  addNotification({
+                    type: 'error',
+                    message: `Failed to download ${modelName}: ${data.message}`,
+                  });
+                  
+                  setTimeout(() => {
+                    setDownloadProgress(null);
+                  }, 10000);
+                  setTimeout(() => removeOperation(operationId), 10000);
+                  return;
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE data:', line);
+            }
+          }
+        }
+      }
+
     } catch (error: any) {
       console.error('Failed to pull model:', error);
+      const errorMessage = error.message || 'Unknown error occurred';
+      
+      setDownloadProgress({
+        percentage: 0,
+        status: 'Download failed',
+        error: errorMessage
+      });
+      
       updateOperation(operationId, { 
         status: 'error',
-        message: `Failed to download ${newModelName}: ${error.response?.data?.message || error.message}`
+        message: errorMessage
       });
-      setTimeout(() => removeOperation(operationId), 10000); // Remove after 10 seconds for errors
+      
+      addNotification({
+        type: 'error',
+        message: `Failed to download ${modelName}: ${errorMessage}`,
+      });
+      
+      setTimeout(() => {
+        setDownloadProgress(null);
+      }, 10000);
+      setTimeout(() => removeOperation(operationId), 10000);
     } finally {
       setPullingModel(null);
     }
@@ -363,6 +514,41 @@ const Settings: React.FC = () => {
             <p className="text-xs text-subtext0 mt-2">
               Enter a model name from Ollama's library. Popular models: llama2, codellama, mistral, llama2:13b
             </p>
+            
+            {/* Download Progress Display */}
+            {downloadProgress && (
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-text font-medium">
+                    {downloadProgress.error ? 'Download Failed' : 'Downloading...'}
+                  </span>
+                  <span className="text-subtext1">
+                    {downloadProgress.percentage.toFixed(1)}%
+                    {downloadProgress.speed && ` • ${downloadProgress.speed}`}
+                  </span>
+                </div>
+                
+                <Progress 
+                  value={downloadProgress.percentage} 
+                  className="w-full h-2"
+                />
+                
+                <div className="text-xs text-subtext1">
+                  {downloadProgress.status}
+                </div>
+                
+                {downloadProgress.error && (
+                  <Alert className="border-red/20 bg-red/10">
+                    <AlertCircle className="h-4 w-4 text-red" />
+                    <AlertDescription className="text-red">
+                      <div className="whitespace-pre-line">
+                        {downloadProgress.error}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Current Model */}
@@ -491,28 +677,40 @@ const Settings: React.FC = () => {
                   <SelectValue placeholder="Select a search provider" />
                 </SelectTrigger>
                 <SelectContent className="bg-surface1 border-surface2">
+                  <SelectItem value="duckduckgo" className="text-text hover:bg-surface2">DuckDuckGo (Free)</SelectItem>
                   <SelectItem value="tavily" className="text-text hover:bg-surface2">Tavily</SelectItem>
                   <SelectItem value="serper" className="text-text hover:bg-surface2">Serper (Google)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-subtext1 mb-2">
-                API Key
-              </label>
-              <Input
-                type="password"
-                value={searchApiKey}
-                onChange={(e) => setSearchApiKey(e.target.value)}
-                placeholder="Enter your search API key"
-                className="bg-surface0 border-surface2 text-text"
-              />
-              <p className="text-xs text-subtext0 mt-1">
-                Required for web search functionality. Get your API key from{' '}
-                {searchProvider === 'tavily' ? 'tavily.com' : 'serper.dev'}
-              </p>
-            </div>
+            {searchProvider !== 'duckduckgo' && (
+              <div>
+                <label className="block text-sm font-medium text-subtext1 mb-2">
+                  API Key
+                </label>
+                <Input
+                  type="password"
+                  value={searchApiKey}
+                  onChange={(e) => setSearchApiKey(e.target.value)}
+                  placeholder="Enter your search API key"
+                  className="bg-surface0 border-surface2 text-text"
+                />
+                <p className="text-xs text-subtext0 mt-1">
+                  Required for web search functionality. Get your API key from{' '}
+                  {searchProvider === 'tavily' ? 'tavily.com' : 'serper.dev'}
+                </p>
+              </div>
+            )}
+            
+            {searchProvider === 'duckduckgo' && (
+              <div className="p-3 bg-green/10 border border-green/20 rounded-lg">
+                <p className="text-sm text-green">
+                  ✓ DuckDuckGo search is free and requires no API key. 
+                  It provides accurate results by fetching full webpage content for your local AI to process.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 

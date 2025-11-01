@@ -12,13 +12,19 @@ class SearchService
     protected $provider;
     protected $apiKey;
     protected $maxResults;
+    protected $duckDuckGoScraper;
+    protected $webContentFetcher;
+    protected $simpleScraper;
 
-    public function __construct()
+    public function __construct(DuckDuckGoScraper $duckDuckGoScraper = null, WebContentFetcher $webContentFetcher = null, SimpleScraper $simpleScraper = null)
     {
         $this->client = new Client();
         $this->provider = config('llm.search.provider');
         $this->apiKey = config('llm.search.api_key');
         $this->maxResults = config('llm.search.max_results', 5);
+        $this->duckDuckGoScraper = $duckDuckGoScraper ?: new DuckDuckGoScraper();
+        $this->webContentFetcher = $webContentFetcher ?: new WebContentFetcher();
+        $this->simpleScraper = $simpleScraper ?: new SimpleScraper();
     }
 
     /**
@@ -26,7 +32,8 @@ class SearchService
      */
     public function search(string $query): array
     {
-        if (!$this->apiKey) {
+        // DuckDuckGo doesn't require API key
+        if ($this->provider !== 'duckduckgo' && !$this->apiKey) {
             return [
                 'error' => 'Search API key not configured',
                 'results' => []
@@ -35,6 +42,9 @@ class SearchService
 
         try {
             switch ($this->provider) {
+                case 'duckduckgo':
+                    return $this->searchDuckDuckGo($query);
+                
                 case 'tavily':
                     return $this->searchTavily($query);
                 
@@ -42,7 +52,7 @@ class SearchService
                     return $this->searchSerper($query);
                 
                 default:
-                    return $this->mockSearch($query);
+                    return $this->searchDuckDuckGo($query); // Default to free option
             }
 
         } catch (RequestException $e) {
@@ -176,10 +186,112 @@ class SearchService
     }
 
     /**
+     * Search using DuckDuckGo (free, no API key required)
+     */
+    protected function searchDuckDuckGo(string $query): array
+    {
+        $searchResults = $this->duckDuckGoScraper->search($query, $this->maxResults);
+        
+        // If DuckDuckGo fails, fallback to simple scraper
+        if (!empty($searchResults['error'])) {
+            Log::info('DuckDuckGo failed, using fallback', ['query' => $query]);
+            $fallbackResults = $this->simpleScraper->search($query, $this->maxResults);
+            
+            return [
+                'query' => $query,
+                'answer' => null,
+                'results' => array_map(function ($result) {
+                    return [
+                        'title' => $result['title'],
+                        'url' => $result['url'],
+                        'content' => $result['snippet'],
+                        'score' => 0.8,
+                    ];
+                }, $fallbackResults['results'])
+            ];
+        }
+
+        // Optionally fetch full content for better accuracy
+        if (config('llm.search.fetch_content', false)) {
+            return $this->searchWithContentFetching($query, $searchResults['results']);
+        }
+
+        return [
+            'query' => $query,
+            'answer' => null,
+            'results' => array_map(function ($result) {
+                return [
+                    'title' => $result['title'],
+                    'url' => $result['url'],
+                    'content' => $result['snippet'],
+                    'score' => 1,
+                ];
+            }, $searchResults['results'])
+        ];
+    }
+
+    /**
+     * Enhanced search with full content fetching
+     */
+    protected function searchWithContentFetching(string $query, array $searchResults): array
+    {
+        $enhancedResults = [];
+        $maxContentResults = min(3, count($searchResults)); // Limit to first 3 for performance
+
+        for ($i = 0; $i < $maxContentResults; $i++) {
+            $result = $searchResults[$i];
+            $contentData = $this->webContentFetcher->fetchContent($result['url']);
+            
+            if ($contentData['success']) {
+                $enhancedResults[] = [
+                    'title' => $contentData['title'] ?: $result['title'],
+                    'url' => $result['url'],
+                    'content' => $contentData['content'] ?: $result['snippet'],
+                    'score' => 1,
+                    'word_count' => $contentData['word_count'],
+                    'has_full_content' => true
+                ];
+            } else {
+                // Fallback to snippet if content fetching fails
+                $enhancedResults[] = [
+                    'title' => $result['title'],
+                    'url' => $result['url'],
+                    'content' => $result['snippet'],
+                    'score' => 0.5,
+                    'has_full_content' => false
+                ];
+            }
+        }
+
+        // Add remaining results without full content
+        for ($i = $maxContentResults; $i < count($searchResults); $i++) {
+            $result = $searchResults[$i];
+            $enhancedResults[] = [
+                'title' => $result['title'],
+                'url' => $result['url'],
+                'content' => $result['snippet'],
+                'score' => 0.3,
+                'has_full_content' => false
+            ];
+        }
+
+        return [
+            'query' => $query,
+            'answer' => null,
+            'results' => $enhancedResults
+        ];
+    }
+
+    /**
      * Check if search service is configured
      */
     public function isConfigured(): bool
     {
+        // DuckDuckGo doesn't require API key
+        if ($this->provider === 'duckduckgo') {
+            return true;
+        }
+        
         return !empty($this->apiKey) && in_array($this->provider, ['tavily', 'serper']);
     }
 }
