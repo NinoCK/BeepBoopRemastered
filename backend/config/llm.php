@@ -36,9 +36,12 @@ return [
     */
     
     'search' => [
-        'provider' => env('SEARCH_PROVIDER', 'tavily'),
+        'provider' => env('SEARCH_PROVIDER', 'duckduckgo'),
         'api_key' => env('SEARCH_API_KEY'),
         'max_results' => env('SEARCH_MAX_RESULTS', 5),
+        'fetch_content' => env('SEARCH_FETCH_CONTENT', true),
+        'max_content_length' => env('SEARCH_MAX_CONTENT_LENGTH', 3000),
+        'rate_limit' => env('SEARCH_RATE_LIMIT', 10),
     ],
 
 ];

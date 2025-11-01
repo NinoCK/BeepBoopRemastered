@@ -42,6 +42,7 @@ Route::prefix('models')->group(function () {
     Route::get('/current', [ModelController::class, 'getCurrentModel']);
     Route::post('/current', [ModelController::class, 'setCurrentModel']);
     Route::post('/pull', [ModelController::class, 'pullModel']);
+    Route::post('/pull/stream', [ModelController::class, 'streamPullModel']);
     Route::delete('/delete', [ModelController::class, 'deleteModel']);
     Route::post('/info', [ModelController::class, 'getModelInfo']);
     Route::get('/status', [ModelController::class, 'getServiceStatus']);
