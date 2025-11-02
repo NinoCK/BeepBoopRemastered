@@ -73,16 +73,42 @@ const Settings: React.FC = () => {
 
   const checkSearchStatus = async () => {
     try {
+      addLog({
+        level: 'info',
+        category: 'system',
+        message: 'Checking search service status',
+        source: 'Settings'
+      });
       const response = await api.get('/search/status');
       setSearchStatus(response.data.configured ? 'configured' : 'not_configured');
       setSearchProvider(response.data.provider || 'tavily');
+      addLog({
+        level: 'info',
+        category: 'system',
+        message: `Search status: ${response.data.configured ? 'configured' : 'not configured'} (${response.data.provider || 'tavily'})`,
+        source: 'Settings',
+        context: { configured: response.data.configured, provider: response.data.provider || 'tavily' }
+      });
     } catch (error) {
       setSearchStatus('not_configured');
+      addLog({
+        level: 'warning',
+        category: 'system',
+        message: 'Search status check failed',
+        source: 'Settings',
+        context: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     }
   };
 
   const testLlmConnection = async () => {
     setLlmStatus('unknown');
+    addLog({
+      level: 'info',
+      category: 'system',
+      message: 'Testing LLM connection',
+      source: 'Settings'
+    });
     try {
       // This would need to be implemented on the backend
       const response = await api.post('/chat', {
@@ -90,18 +116,52 @@ const Settings: React.FC = () => {
         chat_id: 1 // Would need a test endpoint
       });
       setLlmStatus('connected');
+      addLog({
+        level: 'success',
+        category: 'system',
+        message: 'LLM connection test successful',
+        source: 'Settings',
+        context: { endpoint: llmEndpoint }
+      });
     } catch (error) {
       setLlmStatus('disconnected');
+      addLog({
+        level: 'error',
+        category: 'system',
+        message: 'LLM connection test failed',
+        source: 'Settings',
+        context: { endpoint: llmEndpoint, error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     }
   };
 
   const handleSave = async () => {
     try {
+      addLog({
+        level: 'info',
+        category: 'system',
+        message: 'Saving configuration settings',
+        source: 'Settings',
+        context: { llmEndpoint, searchProvider }
+      });
       // This would need to be implemented on the backend to save settings
       console.log('Settings saved:', { llmEndpoint, searchApiKey, searchProvider });
       alert('Settings saved successfully! Please restart the application for changes to take effect.');
+      addLog({
+        level: 'success',
+        category: 'system',
+        message: 'Configuration settings saved successfully',
+        source: 'Settings'
+      });
     } catch (error) {
       console.error('Failed to save settings:', error);
+      addLog({
+        level: 'error',
+        category: 'system',
+        message: 'Failed to save configuration settings',
+        source: 'Settings',
+        context: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
       alert('Failed to save settings. Please try again.');
     }
   };
@@ -109,14 +169,34 @@ const Settings: React.FC = () => {
   // Model management functions
   const fetchModels = async () => {
     setModelsLoading(true);
+    addLog({
+      level: 'info',
+      category: 'model',
+      message: 'Fetching available models',
+      source: 'Settings'
+    });
     try {
       const response = await api.get('/models');
       if (response.data.success) {
         setModels(response.data.models);
+        addLog({
+          level: 'success',
+          category: 'model',
+          message: `Successfully fetched ${response.data.models.length} model(s)`,
+          source: 'Settings',
+          context: { count: response.data.models.length }
+        });
       }
     } catch (error) {
       console.error('Failed to fetch models:', error);
       setModels([]);
+      addLog({
+        level: 'error',
+        category: 'model',
+        message: 'Failed to fetch models',
+        source: 'Settings',
+        context: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     } finally {
       setModelsLoading(false);
     }
@@ -127,9 +207,23 @@ const Settings: React.FC = () => {
       const response = await api.get('/models/current');
       if (response.data.success) {
         setCurrentModel(response.data.model);
+        addLog({
+          level: 'info',
+          category: 'model',
+          message: `Current model: ${response.data.model}`,
+          source: 'Settings',
+          context: { model: response.data.model }
+        });
       }
     } catch (error) {
       console.error('Failed to fetch current model:', error);
+      addLog({
+        level: 'warning',
+        category: 'model',
+        message: 'Failed to fetch current model',
+        source: 'Settings',
+        context: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     }
   };
 
@@ -138,9 +232,23 @@ const Settings: React.FC = () => {
       const response = await api.get('/models/status');
       if (response.data.success) {
         setServiceStatus(response.data.status);
+        addLog({
+          level: 'info',
+          category: 'model',
+          message: `Service status: ${response.data.status}`,
+          source: 'Settings',
+          context: { status: response.data.status }
+        });
       }
     } catch (error) {
       setServiceStatus('offline');
+      addLog({
+        level: 'warning',
+        category: 'model',
+        message: 'Service status check failed, marking as offline',
+        source: 'Settings',
+        context: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     }
   };
 
@@ -159,6 +267,14 @@ const Settings: React.FC = () => {
     setDownloadProgress({
       percentage: 0,
       status: 'Initializing...',
+    });
+
+    addLog({
+      level: 'info',
+      category: 'model',
+      message: `Starting download of model: ${modelName}`,
+      source: 'Settings',
+      context: { model: modelName }
     });
 
     try {
@@ -232,6 +348,13 @@ const Settings: React.FC = () => {
                   updateOperation(operationId, { 
                     message: data.message 
                   });
+                  addLog({
+                    level: 'debug',
+                    category: 'model',
+                    message: `Model download status: ${data.message}`,
+                    source: 'Settings',
+                    context: { model: modelName, status: data.message }
+                  });
                   break;
                   
                 case 'progress':
@@ -244,6 +367,13 @@ const Settings: React.FC = () => {
                     progress: data.percentage,
                     message: `Downloading... ${data.percentage.toFixed(1)}%`
                   });
+                  addLog({
+                    level: 'debug',
+                    category: 'model',
+                    message: `Model download progress: ${data.percentage.toFixed(1)}%`,
+                    source: 'Settings',
+                    context: { model: modelName, percentage: data.percentage, speed: data.speed }
+                  });
                   break;
                   
                 case 'complete':
@@ -255,6 +385,14 @@ const Settings: React.FC = () => {
                     status: 'completed', 
                     progress: 100,
                     message: data.message
+                  });
+                  
+                  addLog({
+                    level: 'success',
+                    category: 'model',
+                    message: `Model download completed: ${modelName}`,
+                    source: 'Settings',
+                    context: { model: modelName }
                   });
                   
                   addNotification({
@@ -279,6 +417,14 @@ const Settings: React.FC = () => {
                   updateOperation(operationId, { 
                     status: 'error',
                     message: data.message
+                  });
+                  
+                  addLog({
+                    level: 'error',
+                    category: 'model',
+                    message: `Model download failed: ${modelName} - ${data.message}`,
+                    source: 'Settings',
+                    context: { model: modelName, error: data.message }
                   });
                   
                   addNotification({
@@ -314,6 +460,14 @@ const Settings: React.FC = () => {
         message: errorMessage
       });
       
+      addLog({
+        level: 'error',
+        category: 'model',
+        message: `Model download error: ${modelName} - ${errorMessage}`,
+        source: 'Settings',
+        context: { model: modelName, error: errorMessage }
+      });
+      
       addNotification({
         type: 'error',
         message: `Failed to download ${modelName}: ${errorMessage}`,
@@ -326,10 +480,20 @@ const Settings: React.FC = () => {
     } finally {
       setPullingModel(null);
     }
-  };  const handleDeleteModel = async (modelName: string) => {
+  };
+  
+  const handleDeleteModel = async (modelName: string) => {
     if (!confirm(`Are you sure you want to delete the model "${modelName}"? This action cannot be undone.`)) {
       return;
     }
+
+    addLog({
+      level: 'warning',
+      category: 'model',
+      message: `Deleting model: ${modelName}`,
+      source: 'Settings',
+      context: { model: modelName }
+    });
 
     const operationId = addOperation({
       type: 'delete',
@@ -348,6 +512,13 @@ const Settings: React.FC = () => {
           status: 'completed',
           message: `Successfully deleted model ${modelName}`
         });
+        addLog({
+          level: 'success',
+          category: 'model',
+          message: `Model deleted successfully: ${modelName}`,
+          source: 'Settings',
+          context: { model: modelName }
+        });
         fetchModels(); // Refresh the list
         setTimeout(() => removeOperation(operationId), 3000); // Remove after 3 seconds
       } else {
@@ -355,13 +526,28 @@ const Settings: React.FC = () => {
           status: 'error',
           message: `Failed to delete model ${modelName}: ${response.data.message}`
         });
+        addLog({
+          level: 'error',
+          category: 'model',
+          message: `Failed to delete model: ${modelName} - ${response.data.message}`,
+          source: 'Settings',
+          context: { model: modelName, error: response.data.message }
+        });
         setTimeout(() => removeOperation(operationId), 8000); // Remove after 8 seconds for errors
       }
     } catch (error: any) {
       console.error('Failed to delete model:', error);
+      const errorMessage = error.response?.data?.message || error.message;
       updateOperation(operationId, { 
         status: 'error',
-        message: `Failed to delete model ${modelName}: ${error.response?.data?.message || error.message}`
+        message: `Failed to delete model ${modelName}: ${errorMessage}`
+      });
+      addLog({
+        level: 'error',
+        category: 'model',
+        message: `Model deletion error: ${modelName} - ${errorMessage}`,
+        source: 'Settings',
+        context: { model: modelName, error: errorMessage }
       });
       setTimeout(() => removeOperation(operationId), 8000); // Remove after 8 seconds for errors
     } finally {

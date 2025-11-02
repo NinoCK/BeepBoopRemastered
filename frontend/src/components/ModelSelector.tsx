@@ -11,6 +11,7 @@ import {
 } from './ui/dropdown-menu';
 import { ChevronDown, Bot, CheckCircle, Circle, AlertCircle } from 'lucide-react';
 import api from '../lib/api';
+import { useAppLogging } from '../contexts/AppLoggingContext';
 
 interface Model {
   name: string;
@@ -29,6 +30,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ className = '' }) => {
   const [currentModel, setCurrentModel] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [serviceStatus, setServiceStatus] = useState<'running' | 'offline' | 'unknown'>('unknown');
+  const { addLog } = useAppLogging();
 
   const fetchModels = async () => {
     try {
@@ -65,16 +67,42 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ className = '' }) => {
   };
 
   const handleModelChange = async (modelName: string) => {
+    const previousModel = currentModel;
+    
+    addLog({
+      level: 'info',
+      category: 'model',
+      message: `Changing model from ${previousModel || 'none'} to ${modelName}`,
+      source: 'ModelSelector',
+      context: { previousModel, newModel: modelName }
+    });
+    
     try {
       const response = await api.post('/models/current', { model: modelName });
       if (response.data.success) {
         setCurrentModel(modelName);
-        // Optional: Show success notification
+        addLog({
+          level: 'success',
+          category: 'model',
+          message: `Model changed successfully to: ${modelName}`,
+          source: 'ModelSelector',
+          context: { previousModel, newModel: modelName }
+        });
         console.log(`Model changed to: ${modelName}`);
       }
     } catch (error) {
       console.error('Failed to change model:', error);
-      // Optional: Show error notification
+      addLog({
+        level: 'error',
+        category: 'model',
+        message: `Failed to change model to: ${modelName}`,
+        source: 'ModelSelector',
+        context: { 
+          previousModel, 
+          newModel: modelName, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        }
+      });
     }
   };
 

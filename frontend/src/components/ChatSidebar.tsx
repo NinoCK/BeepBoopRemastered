@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { MessageSquare, Trash2, Clock, X } from 'lucide-react';
 import api from '../lib/api';
+import { useAppLogging } from '../contexts/AppLoggingContext';
 
 interface Chat {
   id: number;
@@ -32,13 +33,34 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const { id: activeId } = useParams();
+  const { addLog } = useAppLogging();
 
   const fetchChats = async () => {
     try {
+      addLog({
+        level: 'info',
+        category: 'ui',
+        message: 'Fetching chat list',
+        source: 'ChatSidebar'
+      });
       const response = await api.get('/chat');
       setChats(response.data);
+      addLog({
+        level: 'success',
+        category: 'ui',
+        message: `Chat list loaded: ${response.data.length} chat(s)`,
+        source: 'ChatSidebar',
+        context: { count: response.data.length }
+      });
     } catch (error) {
       console.error('Failed to fetch chats:', error);
+      addLog({
+        level: 'error',
+        category: 'ui',
+        message: 'Failed to fetch chat list',
+        source: 'ChatSidebar',
+        context: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     } finally {
       setLoading(false);
     }
@@ -46,6 +68,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   useEffect(() => {
     fetchChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
 
   const deleteChat = async (chatId: number, event: React.MouseEvent) => {
@@ -53,11 +76,32 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     event.stopPropagation();
     
     if (confirm('Are you sure you want to delete this chat?')) {
+      addLog({
+        level: 'warning',
+        category: 'ui',
+        message: `Deleting chat: ${chatId}`,
+        source: 'ChatSidebar',
+        context: { chatId }
+      });
       try {
         await api.delete(`/chat/${chatId}`);
         setChats(chats.filter(chat => chat.id !== chatId));
+        addLog({
+          level: 'success',
+          category: 'ui',
+          message: `Chat deleted: ${chatId}`,
+          source: 'ChatSidebar',
+          context: { chatId }
+        });
       } catch (error) {
         console.error('Failed to delete chat:', error);
+        addLog({
+          level: 'error',
+          category: 'ui',
+          message: `Failed to delete chat: ${chatId}`,
+          source: 'ChatSidebar',
+          context: { chatId, error: error instanceof Error ? error.message : 'Unknown error' }
+        });
       }
     }
   };
@@ -103,6 +147,12 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         <Button
           onClick={() => {
             console.log('Sidebar New Chat button clicked');
+            addLog({
+              level: 'info',
+              category: 'ui',
+              message: 'New chat button clicked from sidebar',
+              source: 'ChatSidebar'
+            });
             if (onNewChat) {
               onNewChat();
             } else {
@@ -132,6 +182,13 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   key={chat.id}
                   to={`/chat/${chat.id}`}
                   onClick={() => {
+                    addLog({
+                      level: 'info',
+                      category: 'ui',
+                      message: `Chat selected from sidebar: ${chat.id}`,
+                      source: 'ChatSidebar',
+                      context: { chatId: chat.id, title: chat.title }
+                    });
                     if (isMobile && onClose) {
                       onClose(); // Close sidebar on mobile when chat is selected
                     }

@@ -25,7 +25,7 @@ const TerminalPanel: React.FC = () => {
     }
   }, [logs, isExpanded]);
 
-  // Add initial system log
+  // Add initial system log and sample logs for demonstration
   useEffect(() => {
     addLog({
       level: 'info',
@@ -33,6 +33,47 @@ const TerminalPanel: React.FC = () => {
       message: 'Terminal initialized and ready',
       source: 'TerminalPanel'
     });
+    
+    // Add sample logs for each category to demonstrate functionality
+    setTimeout(() => {
+      addLog({
+        level: 'info',
+        category: 'model',
+        message: 'Sample: Model list fetched successfully',
+        source: 'TerminalPanel',
+        context: { sample: true, count: 3 }
+      });
+    }, 500);
+    
+    setTimeout(() => {
+      addLog({
+        level: 'success',
+        category: 'api',
+        message: 'Sample: GET /chat - 200 OK',
+        source: 'TerminalPanel',
+        context: { sample: true, method: 'GET', url: '/chat', status: 200, responseTime: '45ms' }
+      });
+    }, 1000);
+    
+    setTimeout(() => {
+      addLog({
+        level: 'info',
+        category: 'system',
+        message: 'Sample: Service status check completed',
+        source: 'TerminalPanel',
+        context: { sample: true, status: 'running' }
+      });
+    }, 1500);
+    
+    setTimeout(() => {
+      addLog({
+        level: 'info',
+        category: 'ui',
+        message: 'Sample: Component initialization complete',
+        source: 'TerminalPanel',
+        context: { sample: true, component: 'ChatWindow' }
+      });
+    }, 2000);
   }, [addLog]);
 
   // Filter logs based on active tab

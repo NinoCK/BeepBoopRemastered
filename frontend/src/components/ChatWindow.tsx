@@ -8,6 +8,7 @@ import MessageBubble from './MessageBubble';
 import StreamingMessageBubble from './StreamingMessageBubble';
 import { Send, Loader2, FileText, Search, Brain } from 'lucide-react';
 import api from '../lib/api';
+import { useAppLogging } from '../contexts/AppLoggingContext';
 
 interface Message {
   id: number;
@@ -35,6 +36,7 @@ interface ChatWindowProps {
 const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => {
   const { id } = useParams();
   const currentChatId = chatId || (id ? parseInt(id) : null);
+  const { addLog } = useAppLogging();
   
   const [chat, setChat] = useState<Chat | null>(null);
   const [input, setInput] = useState('');
@@ -45,6 +47,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
   const [streamingContent, setStreamingContent] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const generationStartTimeRef = useRef<number | null>(null);
+  const currentModelRef = useRef<string | null>(null);
 
   const scrollToBottom = () => {
     // Use a small timeout to ensure the DOM is updated
@@ -59,9 +63,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
 
   useEffect(() => {
     if (currentChatId && currentChatId.toString() !== 'new') {
+      addLog({
+        level: 'info',
+        category: 'ui',
+        message: `Chat selected: ${currentChatId}`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId }
+      });
       fetchChat();
     }
-  }, [currentChatId]);
+  }, [currentChatId, addLog]);
 
   // Messages loaded successfully
 
@@ -70,10 +81,31 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
     
     try {
       setInitialLoading(true);
+      addLog({
+        level: 'info',
+        category: 'api',
+        message: `Fetching chat: ${currentChatId}`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId }
+      });
       const response = await api.get(`/chat/${currentChatId}`);
       setChat(response.data);
+      addLog({
+        level: 'success',
+        category: 'api',
+        message: `Chat loaded: ${response.data.title || `Chat ${currentChatId}`} (${response.data.messages.length} messages)`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId, messageCount: response.data.messages.length }
+      });
     } catch (error) {
       console.error('Failed to fetch chat:', error);
+      addLog({
+        level: 'error',
+        category: 'api',
+        message: `Failed to fetch chat: ${currentChatId}`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId, error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     } finally {
       setInitialLoading(false);
     }
@@ -89,6 +121,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
     setStreamingThinking('');
     setStreamingContent('');
     setIsThinking(false);
+    
+    addLog({
+      level: 'info',
+      category: 'ui',
+      message: `User message sent: ${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}`,
+      source: 'ChatWindow',
+      context: { chatId: currentChatId, messageLength: userMessage.length }
+    });
 
     // Add user message to chat immediately
     const tempUserMessage = {
@@ -107,6 +147,38 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
     });
 
     try {
+      // Fetch current model before starting generation
+      let currentModel = 'unknown';
+      try {
+        const modelResponse = await api.get('/models/current');
+        if (modelResponse.data.success) {
+          currentModel = modelResponse.data.model;
+          currentModelRef.current = currentModel;
+        }
+      } catch (modelError) {
+        console.warn('Failed to fetch current model:', modelError);
+      }
+      
+      // Track generation start time
+      generationStartTimeRef.current = Date.now();
+      
+      addLog({
+        level: 'info',
+        category: 'api',
+        message: `Starting streaming request for chat: ${currentChatId}`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId, messageLength: userMessage.length }
+      });
+      
+      // Log model generation start
+      addLog({
+        level: 'info',
+        category: 'model',
+        message: `Model generation started: ${currentModel}`,
+        source: 'ChatWindow',
+        context: { model: currentModel, chatId: currentChatId }
+      });
+      
       const response = await fetch(`${api.defaults.baseURL}/chat/stream`, {
         method: 'POST',
         headers: {
@@ -122,6 +194,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      addLog({
+        level: 'success',
+        category: 'api',
+        message: `Streaming connection established for chat: ${currentChatId}`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId, status: response.status }
+      });
 
       const reader = response.body?.getReader();
       if (!reader) {
@@ -166,6 +246,30 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
                   break;
                   
                 case 'complete':
+                  // Calculate generation time
+                  const generationEndTime = Date.now();
+                  const generationTime = generationStartTimeRef.current 
+                    ? generationEndTime - generationStartTimeRef.current 
+                    : null;
+                  const generationTimeSeconds = generationTime ? (generationTime / 1000).toFixed(2) : null;
+                  const modelName = currentModelRef.current || 'unknown';
+                  
+                  // Log model generation completion
+                  if (generationTimeSeconds) {
+                    addLog({
+                      level: 'success',
+                      category: 'model',
+                      message: `Model generation completed: ${modelName} (${generationTimeSeconds}s)`,
+                      source: 'ChatWindow',
+                      context: { 
+                        model: modelName, 
+                        chatId: currentChatId,
+                        generationTime: `${generationTimeSeconds}s`,
+                        generationTimeMs: generationTime
+                      }
+                    });
+                  }
+                  
                   // Update with final messages from server
                   setChat(prevChat => {
                     if (!prevChat) return null;
@@ -185,11 +289,37 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
                   setIsStreaming(false);
                   setStreamingThinking('');
                   setStreamingContent('');
+                  generationStartTimeRef.current = null;
+                  currentModelRef.current = null;
+                  
+                  addLog({
+                    level: 'success',
+                    category: 'api',
+                    message: `Streaming complete for chat: ${currentChatId}`,
+                    source: 'ChatWindow',
+                    context: { chatId: currentChatId }
+                  });
+                  
+                  addLog({
+                    level: 'debug',
+                    category: 'ui',
+                    message: 'Messages updated after streaming',
+                    source: 'ChatWindow',
+                    context: { chatId: currentChatId }
+                  });
+                  
                   onMessagesUpdate?.();
                   return; // Exit the loop
                   
                 case 'error':
                   console.error('Streaming error:', data.error);
+                  addLog({
+                    level: 'error',
+                    category: 'api',
+                    message: `Streaming error for chat: ${currentChatId} - ${data.error}`,
+                    source: 'ChatWindow',
+                    context: { chatId: currentChatId, error: data.error }
+                  });
                   setIsStreaming(false);
                   return; // Exit the loop
               }
@@ -202,6 +332,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
 
     } catch (error) {
       console.error('Failed to start streaming:', error);
+      
+      // Reset generation tracking on error
+      generationStartTimeRef.current = null;
+      currentModelRef.current = null;
+      
+      addLog({
+        level: 'error',
+        category: 'api',
+        message: `Failed to start streaming for chat: ${currentChatId}`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId, error: error instanceof Error ? error.message : 'Unknown error' }
+      });
+      
+      addLog({
+        level: 'error',
+        category: 'model',
+        message: `Model generation failed to start`,
+        source: 'ChatWindow',
+        context: { chatId: currentChatId, error: error instanceof Error ? error.message : 'Unknown error' }
+      });
+      
       setIsStreaming(false);
       
       // Fallback to regular API call
@@ -211,6 +362,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
 
   // Fallback function for when streaming fails
   const handleFallbackMessage = async (userMessage: string, chatId: number, tempUserMessage: any) => {
+    // Fetch current model and track generation time for fallback
+    let currentModel = 'unknown';
+    try {
+      const modelResponse = await api.get('/models/current');
+      if (modelResponse.data.success) {
+        currentModel = modelResponse.data.model;
+      }
+    } catch (modelError) {
+      console.warn('Failed to fetch current model:', modelError);
+    }
+    
+    const fallbackStartTime = Date.now();
+    
+    addLog({
+      level: 'info',
+      category: 'model',
+      message: `Model generation started (fallback): ${currentModel}`,
+      source: 'ChatWindow',
+      context: { model: currentModel, chatId: chatId }
+    });
+    
     try {
       // Using fallback API call
       setLoading(true);
@@ -219,7 +391,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         chat_id: chatId
       });
 
-      // Fallback response received
+      // Calculate generation time for fallback
+      const fallbackEndTime = Date.now();
+      const fallbackGenerationTime = ((fallbackEndTime - fallbackStartTime) / 1000).toFixed(2);
+      
+      addLog({
+        level: 'success',
+        category: 'model',
+        message: `Model generation completed (fallback): ${currentModel} (${fallbackGenerationTime}s)`,
+        source: 'ChatWindow',
+        context: { 
+          model: currentModel, 
+          chatId: chatId,
+          generationTime: `${fallbackGenerationTime}s`,
+          generationTimeMs: fallbackEndTime - fallbackStartTime
+        }
+      });
 
       setChat(prevChat => {
         if (!prevChat) return null;
@@ -234,9 +421,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
             response.data.assistant_message
           ]
         };
-      });      onMessagesUpdate?.();
+      });
+      onMessagesUpdate?.();
     } catch (error) {
       console.error('Fallback message failed:', error);
+      addLog({
+        level: 'error',
+        category: 'model',
+        message: `Model generation failed (fallback): ${currentModel}`,
+        source: 'ChatWindow',
+        context: { model: currentModel, chatId: chatId, error: error instanceof Error ? error.message : 'Unknown error' }
+      });
       setInput(userMessage); // Restore input
     } finally {
       setLoading(false);
