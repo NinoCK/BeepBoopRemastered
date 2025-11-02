@@ -5,17 +5,21 @@ namespace App\Http\Controllers;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Services\LLMService;
+use App\Services\RAGService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ChatController extends Controller
 {
     protected $llmService;
+    protected $ragService;
 
-    public function __construct(LLMService $llmService)
+    public function __construct(LLMService $llmService, RAGService $ragService)
     {
         $this->llmService = $llmService;
+        $this->ragService = $ragService;
     }
 
     /**
@@ -96,17 +100,32 @@ class ChatController extends Controller
                 $context[] = ucfirst($msg->sender) . ": " . $msg->content;
             }
 
+            // Get RAG context from uploaded documents
+            $ragContext = $this->ragService->getRelevantContext($request->message, 5);
+            if (!empty($ragContext)) {
+                // Prepend RAG context to chat context
+                $context = array_merge([
+                    "=== Relevant information from uploaded documents ==="
+                ], $ragContext, [
+                    "=== End of document context ==="
+                ], $context);
+            }
+
             // Generate AI response
             $responseData = $this->llmService->generateResponse($request->message, $context);
 
-            // Save assistant message with thinking content
+            // Get current model name
+            $currentModel = Cache::get('selected_model', config('llm.model', 'llama2'));
+
+            // Save assistant message with thinking content and model name
             $assistantMessage = Message::create([
                 'chat_id' => $chat->id,
                 'sender' => 'assistant',
                 'content' => $responseData['content'],
                 'metadata' => [
                     'thinking' => $responseData['thinking'],
-                    'has_thinking' => !is_null($responseData['thinking'])
+                    'has_thinking' => !is_null($responseData['thinking']),
+                    'model' => $currentModel
                 ],
                 'sent_at' => now(),
             ]);
@@ -168,6 +187,17 @@ class ChatController extends Controller
             $context = [];
             foreach ($recentMessages as $msg) {
                 $context[] = ucfirst($msg->sender) . ": " . $msg->content;
+            }
+
+            // Get RAG context from uploaded documents
+            $ragContext = $this->ragService->getRelevantContext($request->message, 5);
+            if (!empty($ragContext)) {
+                // Prepend RAG context to chat context
+                $context = array_merge([
+                    "=== Relevant information from uploaded documents ==="
+                ], $ragContext, [
+                    "=== End of document context ==="
+                ], $context);
             }
 
             return response()->stream(function () use ($request, $context, $chat, $userMessage) {
@@ -243,13 +273,17 @@ class ChatController extends Controller
                 // Save the final message
                 $responseData = $this->llmService->extractThinkingContent($fullResponse);
                 
+                // Get current model name
+                $currentModel = Cache::get('selected_model', config('llm.model', 'llama2'));
+                
                 $assistantMessage = Message::create([
                     'chat_id' => $chat->id,
                     'sender' => 'assistant',
                     'content' => $responseData['content'],
                     'metadata' => [
                         'thinking' => $responseData['thinking'],
-                        'has_thinking' => !is_null($responseData['thinking'])
+                        'has_thinking' => !is_null($responseData['thinking']),
+                        'model' => $currentModel
                     ],
                     'sent_at' => now(),
                 ]);

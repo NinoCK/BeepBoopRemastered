@@ -47,8 +47,13 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Log API request
-    if (logger) {
+    // Don't set Content-Type for FormData - let axios handle it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
+    // Log API request (skip periodic status checks)
+    if (logger && config.url !== '/models/status') {
       const startTime = Date.now();
       (config as any).__startTime = startTime;
       
@@ -64,6 +69,10 @@ api.interceptors.request.use(
           data: config.data ? sanitizeData(config.data) : undefined
         }
       });
+    } else if (logger && config.url === '/models/status') {
+      // Still track start time for response interceptor even if not logging
+      const startTime = Date.now();
+      (config as any).__startTime = startTime;
     }
     
     return config;
@@ -86,8 +95,8 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
-    // Log successful API response
-    if (logger) {
+    // Log successful API response (skip periodic status checks)
+    if (logger && response.config.url !== '/models/status') {
       const startTime = (response.config as any).__startTime;
       const responseTime = startTime ? Date.now() - startTime : undefined;
       
@@ -116,8 +125,8 @@ api.interceptors.response.use(
       // Redirect to login or handle as needed
     }
     
-    // Log API error
-    if (logger) {
+    // Log API error (skip periodic status checks unless it's a network error)
+    if (logger && error.config?.url !== '/models/status') {
       const startTime = (error.config as any)?.__startTime;
       const responseTime = startTime ? Date.now() - startTime : undefined;
       

@@ -28,6 +28,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
   
   const hasThinking = message.metadata?.has_thinking && message.metadata?.thinking;
+  
+  // Get model name from metadata, with fallback to "AI Assistant"
+  const getModelName = () => {
+    if (message.metadata?.model) {
+      // Format model name: remove version tags for display (e.g., "llama2:7b" -> "llama2")
+      return message.metadata.model.split(':')[0];
+    }
+    return 'AI Assistant';
+  };
 
   // Parse message content for code blocks
   const messageSegments = useMemo(() => {
@@ -88,7 +97,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               {getSenderIcon()}
             </div>
             <span className="text-sm font-medium text-subtext1 whitespace-nowrap">
-              {isUser ? 'You' : 'AI Assistant'}
+              {isUser ? 'You' : getModelName()}
             </span>
             <span className="text-xs text-subtext0 whitespace-nowrap">
               {formatTime(message.sent_at)}

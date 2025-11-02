@@ -125,13 +125,46 @@ class LLMService
     }
 
     /**
-     * Generate embeddings for text (placeholder for future implementation)
+     * Generate embeddings for text
+     * Note: Ollama supports embeddings via /api/embeddings endpoint
      */
     public function generateEmbeddings(string $text): array
     {
-        // This would typically call an embedding model
-        // For now, return a simple hash-based representation
-        return [hash('sha256', $text)];
+        try {
+            // Use Ollama embeddings endpoint if available
+            $embeddingsEndpoint = str_replace('/api/generate', '/api/embeddings', $this->endpoint);
+            
+            $payload = [
+                'model' => $this->model,
+                'prompt' => $text,
+            ];
+
+            $response = $this->client->post($embeddingsEndpoint, [
+                'json' => $payload,
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            $responseData = json_decode($response->getBody()->getContents(), true);
+            
+            if (isset($responseData['embedding'])) {
+                return $responseData['embedding'];
+            }
+            
+            // Fallback to hash-based representation
+            return [hash('sha256', $text)];
+            
+        } catch (RequestException $e) {
+            Log::warning('Embeddings generation failed, using fallback', [
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback to hash-based representation
+            return [hash('sha256', $text)];
+        }
     }
 
     /**

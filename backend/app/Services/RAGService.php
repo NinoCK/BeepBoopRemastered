@@ -7,6 +7,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Smalot\PdfParser\Parser as PdfParser;
+use PhpOffice\PhpWord\IOFactory as PhpWordIOFactory;
 
 class RAGService
 {
@@ -71,21 +73,108 @@ class RAGService
     }
 
     /**
+     * Query documents using RAG and return relevant context chunks
+     */
+    public function getRelevantContext(string $query, int $limit = 5): array
+    {
+        $chunks = $this->findRelevantChunks($query, $limit);
+        
+        if (empty($chunks)) {
+            return [];
+        }
+
+        // Format chunks for context
+        $context = [];
+        foreach ($chunks as $chunkData) {
+            $context[] = "From document '{$chunkData['document_name']}':\n{$chunkData['chunk']}";
+        }
+
+        return $context;
+    }
+
+    /**
      * Query documents using RAG
      */
     public function query(string $query, int $limit = 5): string
     {
-        $relevantDocuments = $this->findRelevantDocuments($query, $limit);
+        $context = $this->getRelevantContext($query, $limit);
         
-        if ($relevantDocuments->isEmpty()) {
-            return $this->llmService->generateResponse($query);
+        if (empty($context)) {
+            $response = $this->llmService->generateResponse($query);
+            return is_array($response) ? $response['content'] : $response;
         }
 
-        $context = $relevantDocuments->map(function ($doc) {
-            return "Document: {$doc->name}\nContent: {$doc->content}";
-        })->toArray();
+        $response = $this->llmService->generateResponse($query, $context);
+        return is_array($response) ? $response['content'] : $response;
+    }
 
-        return $this->llmService->generateResponse($query, $context);
+    /**
+     * Find relevant documents for a query
+     * Returns relevant chunks from documents using keyword matching
+     */
+    public function findRelevantChunks(string $query, int $limit = 5): array
+    {
+        $documents = Document::where('status', 'ready')->get();
+        
+        if ($documents->isEmpty()) {
+            return [];
+        }
+
+        $relevantChunks = [];
+        $keywords = array_filter(explode(' ', strtolower($query)), function($word) {
+            return strlen($word) > 2; // Filter out short words
+        });
+
+        foreach ($documents as $document) {
+            if (!$document->chunks || empty($document->chunks)) {
+                // If no chunks, search in full content
+                $content = strtolower($document->content ?? '');
+                $score = 0;
+                foreach ($keywords as $keyword) {
+                    if (strpos($content, $keyword) !== false) {
+                        $score += substr_count($content, $keyword);
+                    }
+                }
+                
+                if ($score > 0) {
+                    // Use first 1000 chars as chunk
+                    $chunk = substr($document->content, 0, 1000);
+                    $relevantChunks[] = [
+                        'document_id' => $document->id,
+                        'document_name' => $document->name,
+                        'chunk' => $chunk,
+                        'score' => $score
+                    ];
+                }
+            } else {
+                // Search in chunks
+                foreach ($document->chunks as $chunkIndex => $chunk) {
+                    $chunkLower = strtolower($chunk);
+                    $score = 0;
+                    foreach ($keywords as $keyword) {
+                        if (strpos($chunkLower, $keyword) !== false) {
+                            $score += substr_count($chunkLower, $keyword);
+                        }
+                    }
+                    
+                    if ($score > 0) {
+                        $relevantChunks[] = [
+                            'document_id' => $document->id,
+                            'document_name' => $document->name,
+                            'chunk' => $chunk,
+                            'score' => $score
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Sort by score and limit
+        usort($relevantChunks, function($a, $b) {
+            return $b['score'] - $a['score'];
+        });
+
+        return array_slice($relevantChunks, 0, $limit);
     }
 
     /**
@@ -93,17 +182,21 @@ class RAGService
      */
     protected function findRelevantDocuments(string $query, int $limit = 5)
     {
-        // Simple keyword-based search for now
-        // In a production app, you'd use vector similarity search
-        return Document::where('status', 'ready')
-            ->where(function ($q) use ($query) {
-                $keywords = explode(' ', strtolower($query));
-                foreach ($keywords as $keyword) {
-                    $q->orWhere('content', 'LIKE', "%{$keyword}%");
-                }
-            })
-            ->limit($limit)
-            ->get();
+        // Use chunk-based search for better relevance
+        $chunks = $this->findRelevantChunks($query, $limit);
+        
+        // Group by document and get unique documents
+        $documentIds = array_unique(array_column($chunks, 'document_id'));
+        $documents = Document::whereIn('id', $documentIds)->get();
+        
+        // Attach relevant chunks to documents
+        foreach ($documents as $document) {
+            $document->relevant_chunks = array_filter($chunks, function($chunk) use ($document) {
+                return $chunk['document_id'] === $document->id;
+            });
+        }
+        
+        return $documents;
     }
 
     /**
@@ -113,21 +206,113 @@ class RAGService
     {
         $filePath = Storage::path($document->path);
         
-        switch ($document->mime_type) {
-            case 'text/plain':
-                return file_get_contents($filePath);
+        if (!file_exists($filePath)) {
+            throw new \Exception("File not found: {$filePath}");
+        }
+        
+        try {
+            switch ($document->mime_type) {
+                case 'text/plain':
+                    $content = file_get_contents($filePath);
+                    return $content !== false ? $content : '';
+                
+                case 'application/pdf':
+                    return $this->extractPdfContent($filePath);
+                
+                case 'application/msword':
+                case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                    return $this->extractWordContent($filePath);
+                
+                default:
+                    // Try to extract based on file extension as fallback
+                    $extension = strtolower(pathinfo($document->name, PATHINFO_EXTENSION));
+                    
+                    if ($extension === 'pdf') {
+                        return $this->extractPdfContent($filePath);
+                    } elseif (in_array($extension, ['doc', 'docx'])) {
+                        return $this->extractWordContent($filePath);
+                    } elseif ($extension === 'txt') {
+                        $content = file_get_contents($filePath);
+                        return $content !== false ? $content : '';
+                    }
+                    
+                    throw new \Exception("Unsupported file type: {$document->mime_type}");
+            }
+        } catch (\Exception $e) {
+            Log::error('Document extraction error', [
+                'document_id' => $document->id,
+                'file_path' => $filePath,
+                'mime_type' => $document->mime_type,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Extract text from PDF file
+     */
+    protected function extractPdfContent(string $filePath): string
+    {
+        try {
+            $parser = new PdfParser();
+            $pdf = $parser->parseFile($filePath);
+            $text = $pdf->getText();
             
-            case 'application/pdf':
-                // In a real app, you'd use a PDF parsing library
-                return "PDF content extraction not implemented. File: {$document->name}";
+            // Clean up the text
+            $text = preg_replace('/\s+/', ' ', $text);
+            $text = trim($text);
             
-            case 'application/msword':
-            case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                // In a real app, you'd use a Word document parsing library
-                return "Word document content extraction not implemented. File: {$document->name}";
+            return $text;
+        } catch (\Exception $e) {
+            Log::error('PDF extraction failed', [
+                'file_path' => $filePath,
+                'error' => $e->getMessage()
+            ]);
+            throw new \Exception("Failed to extract PDF content: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Extract text from Word document (DOC/DOCX)
+     */
+    protected function extractWordContent(string $filePath): string
+    {
+        try {
+            $phpWord = PhpWordIOFactory::load($filePath);
+            $text = '';
             
-            default:
-                return "Unsupported file type: {$document->mime_type}";
+            foreach ($phpWord->getSections() as $section) {
+                foreach ($section->getElements() as $element) {
+                    if (method_exists($element, 'getText')) {
+                        $text .= $element->getText() . "\n";
+                    } elseif (method_exists($element, 'getRows')) {
+                        // Handle tables
+                        foreach ($element->getRows() as $row) {
+                            foreach ($row->getCells() as $cell) {
+                                foreach ($cell->getElements() as $cellElement) {
+                                    if (method_exists($cellElement, 'getText')) {
+                                        $text .= $cellElement->getText() . " ";
+                                    }
+                                }
+                            }
+                            $text .= "\n";
+                        }
+                    }
+                }
+            }
+            
+            // Clean up the text
+            $text = preg_replace('/\s+/', ' ', $text);
+            $text = trim($text);
+            
+            return $text;
+        } catch (\Exception $e) {
+            Log::error('Word document extraction failed', [
+                'file_path' => $filePath,
+                'error' => $e->getMessage()
+            ]);
+            throw new \Exception("Failed to extract Word document content: " . $e->getMessage());
         }
     }
 

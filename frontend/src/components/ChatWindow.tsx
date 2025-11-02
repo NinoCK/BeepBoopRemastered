@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Card } from './ui/card';
 import MessageBubble from './MessageBubble';
 import StreamingMessageBubble from './StreamingMessageBubble';
+import RAGDocumentsPanel from './RAGDocumentsPanel';
 import { Send, Loader2, FileText, Search, Brain } from 'lucide-react';
 import api from '../lib/api';
 import { useAppLogging } from '../contexts/AppLoggingContext';
@@ -46,6 +47,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
   const [streamingThinking, setStreamingThinking] = useState('');
   const [streamingContent, setStreamingContent] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const [currentModel, setCurrentModel] = useState<string | null>(null);
+  const [ragPanelOpen, setRagPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const generationStartTimeRef = useRef<number | null>(null);
   const currentModelRef = useRef<string | null>(null);
@@ -154,6 +157,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         if (modelResponse.data.success) {
           currentModel = modelResponse.data.model;
           currentModelRef.current = currentModel;
+          setCurrentModel(currentModel);
         }
       } catch (modelError) {
         console.warn('Failed to fetch current model:', modelError);
@@ -368,6 +372,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
       const modelResponse = await api.get('/models/current');
       if (modelResponse.data.success) {
         currentModel = modelResponse.data.model;
+        setCurrentModel(currentModel);
       }
     } catch (modelError) {
       console.warn('Failed to fetch current model:', modelError);
@@ -536,6 +541,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
                 mainContent={streamingContent}
                 isThinking={isThinking}
                 isComplete={false}
+                modelName={currentModel || undefined}
               />
             )}
             
@@ -549,7 +555,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
                         <Loader2 className="w-4 h-4 animate-spin" />
                       </div>
                       <span className="text-sm font-medium text-subtext1">
-                        AI Assistant is thinking...
+                        {currentModel ? `${currentModel.split(':')[0]} is thinking...` : 'AI Assistant is thinking...'}
                       </span>
                     </div>
                   </div>
@@ -595,10 +601,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         <div className="flex items-center justify-between mt-2 text-xs text-subtext0">
           <span>Press Shift+Enter for new line</span>
           <div className="flex items-center space-x-4">
-            <span className="flex items-center">
+            <Button
+              data-rag-button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRagPanelOpen(!ragPanelOpen)}
+              className="h-auto py-1 px-2 text-xs hover:bg-surface2 flex items-center"
+            >
               <FileText className="w-3 h-3 mr-1" />
-              RAG enabled
-            </span>
+              RAG Documents
+              {ragPanelOpen && <span className="ml-1">↑</span>}
+            </Button>
             <span className="flex items-center">
               <Search className="w-3 h-3 mr-1" />
               Web search available
@@ -606,6 +619,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
           </div>
         </div>
       </div>
+
+      {/* RAG Documents Panel */}
+      <RAGDocumentsPanel 
+        isOpen={ragPanelOpen} 
+        onClose={() => setRagPanelOpen(false)} 
+      />
     </div>
   );
 };
