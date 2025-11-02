@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Document;
 use App\Services\RAGService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -78,12 +79,13 @@ class RAGController extends Controller
     }
 
     /**
-     * Get all documents
+     * Get all documents (including processing and failed ones)
      */
     public function documents(): JsonResponse
     {
         try {
-            $documents = $this->ragService->getDocuments();
+            // Get all documents, not just ready ones
+            $documents = Document::orderBy('created_at', 'desc')->get();
 
             return response()->json([
                 'documents' => $documents,

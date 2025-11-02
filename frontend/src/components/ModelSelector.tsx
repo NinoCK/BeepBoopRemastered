@@ -120,6 +120,18 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ className = '' }) => {
     loadData();
   }, []);
 
+  // Periodically check service status
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchServiceStatus();
+    }, 5000); // Check every 5 seconds
+
+    // Check immediately on mount
+    fetchServiceStatus();
+
+    return () => clearInterval(interval);
+  }, []);
+
   const formatModelName = (name: string) => {
     // Remove version tags for display (e.g., "llama2:7b" -> "llama2")
     return name.split(':')[0];
@@ -175,9 +187,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ className = '' }) => {
         <span className="hidden sm:inline text-sm">
           {formatModelName(currentModel) || 'No Model'}
         </span>
-        <Badge variant="secondary" className={`hidden md:inline ${getStatusColor()}`}>
+        <Badge variant="secondary" className={`hidden md:inline-flex items-center gap-1 ${getStatusColor()}`}>
           {getStatusIcon()}
-          <span className="ml-1">{serviceStatus}</span>
+          <span>{serviceStatus}</span>
         </Badge>
       </Button>
       
@@ -197,9 +209,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ className = '' }) => {
         <DropdownMenuLabel className="text-text">
           <div className="flex items-center justify-between">
             <span>Select Model</span>
-            <Badge variant="secondary" className={getStatusColor()}>
+            <Badge variant="secondary" className={`inline-flex items-center gap-1 ${getStatusColor()}`}>
               {getStatusIcon()}
-              <span className="ml-1">{serviceStatus}</span>
+              <span>{serviceStatus}</span>
             </Badge>
           </div>
         </DropdownMenuLabel>

@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAppLogging } from '../contexts/AppLoggingContext';
 import { useModelOperations } from '../contexts/ModelOperationContext';
+import DocumentUpload from '../components/DocumentUpload';
 import { 
   Settings as SettingsIcon, 
   Server, 
@@ -930,6 +931,18 @@ const Settings: React.FC = () => {
               </div>
             </div>
           </div>
+        </Card>
+
+        {/* Document Management / RAG */}
+        <Card className="p-6 bg-surface1 border-surface2">
+          <div className="flex items-center space-x-3 mb-4">
+            <FileText className="w-5 h-5 text-accent" />
+            <h2 className="text-lg font-semibold text-text">Document Management (RAG)</h2>
+          </div>
+          <p className="text-sm text-subtext0 mb-4">
+            Upload documents (TXT, PDF, DOC, DOCX) to enable Retrieval-Augmented Generation. The AI will automatically search your documents when answering questions.
+          </p>
+          <DocumentUpload />
         </Card>
 
         {/* System Information */}

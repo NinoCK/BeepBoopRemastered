@@ -10,13 +10,15 @@ interface StreamingMessageProps {
   mainContent: string;
   isThinking: boolean;
   isComplete: boolean;
+  modelName?: string;
 }
 
 const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
   thinkingContent,
   mainContent,
   isThinking,
-  isComplete
+  isComplete,
+  modelName = 'AI Assistant'
 }) => {
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
   const [displayedThinking, setDisplayedThinking] = useState('');
@@ -50,6 +52,9 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
   };
 
   const hasThinking = thinkingContent.length > 0;
+  
+  // Format model name: remove version tags for display (e.g., "llama2:7b" -> "llama2")
+  const formattedModelName = modelName.includes(':') ? modelName.split(':')[0] : modelName;
 
   // Parse displayed content for code blocks
   const messageSegments = useMemo(() => {
@@ -66,7 +71,7 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
               <Bot className="w-4 h-4" />
             </div>
             <span className="text-sm font-medium text-subtext1 whitespace-nowrap">
-              AI Assistant
+              {formattedModelName}
             </span>
             <span className="text-xs text-subtext0 whitespace-nowrap">
               {formatTime()}
@@ -88,7 +93,7 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
                 <div className="flex items-center space-x-2">
                   <Brain className={`w-4 h-4 text-accent ${isThinking ? 'brain-thinking' : ''}`} />
                   <span className="text-sm font-medium text-subtext1">
-                    {isThinking ? 'AI is thinking...' : 'AI thought process'}
+                    {isThinking ? `${formattedModelName} is thinking...` : `${formattedModelName} thought process`}
                   </span>
                   {isThinking && (
                     <Loader2 className="w-3 h-3 animate-spin text-accent" />
