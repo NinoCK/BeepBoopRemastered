@@ -7,7 +7,7 @@ import { Card } from './ui/card';
 import MessageBubble from './MessageBubble';
 import StreamingMessageBubble from './StreamingMessageBubble';
 import RAGDocumentsPanel from './RAGDocumentsPanel';
-import { Send, Loader2, FileText, Search, Brain } from 'lucide-react';
+import { Send, Loader2, FileText, Search, Brain, X, Edit2 } from 'lucide-react';
 import api from '../lib/api';
 import { useAppLogging } from '../contexts/AppLoggingContext';
 
@@ -49,6 +49,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
   const [isThinking, setIsThinking] = useState(false);
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [ragPanelOpen, setRagPanelOpen] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const generationStartTimeRef = useRef<number | null>(null);
   const currentModelRef = useRef<string | null>(null);
@@ -74,6 +75,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         context: { chatId: currentChatId }
       });
       fetchChat();
+    } else if (!currentChatId) {
+      // No chat selected, show welcome message immediately
+      setInitialLoading(false);
     }
   }, [currentChatId, addLog]);
 
@@ -114,12 +118,30 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
     }
   };
 
+  const handleEditMessage = (messageId: number, currentContent: string) => {
+    // Just set the input for editing - don't delete anything yet
+    setInput(currentContent);
+    setEditingMessageId(messageId);
+    
+    addLog({
+      level: 'info',
+      category: 'ui',
+      message: `Starting to edit message ${messageId}`,
+      source: 'ChatWindow',
+      context: { messageId }
+    });
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !currentChatId || loading || isStreaming) return;
 
     const userMessage = input.trim();
+    const isEditing = editingMessageId !== null;
+    const messageIdToEdit = editingMessageId;
+    
     setInput('');
+    setEditingMessageId(null);
     setIsStreaming(true);
     setStreamingThinking('');
     setStreamingContent('');
@@ -128,9 +150,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
     addLog({
       level: 'info',
       category: 'ui',
-      message: `User message sent: ${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}`,
+      message: `${isEditing ? 'Editing' : 'User'} message sent: ${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}`,
       source: 'ChatWindow',
-      context: { chatId: currentChatId, messageLength: userMessage.length }
+      context: { chatId: currentChatId, messageLength: userMessage.length, isEditing, messageIdToEdit }
     });
 
     // Add user message to chat immediately
@@ -143,10 +165,39 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
 
     setChat(prevChat => {
       if (!prevChat) return null;
-      return {
-        ...prevChat,
-        messages: [...prevChat.messages, tempUserMessage]
-      };
+      
+      if (isEditing && messageIdToEdit) {
+        // When editing, remove all messages after the edited one and replace it
+        const messageIndex = prevChat.messages.findIndex(m => m.id === messageIdToEdit);
+        if (messageIndex === -1) {
+          // Message not found, just add as new
+          return {
+            ...prevChat,
+            messages: [...prevChat.messages, tempUserMessage]
+          };
+        }
+        
+        const deletedCount = prevChat.messages.length - messageIndex - 1;
+        addLog({
+          level: 'info',
+          category: 'ui',
+          message: `Removed ${deletedCount} messages after edited message`,
+          source: 'ChatWindow',
+          context: { messageIdToEdit, messageIndex, deletedCount }
+        });
+        
+        // Remove everything after the edited message, and add the new temp message
+        return {
+          ...prevChat,
+          messages: [...prevChat.messages.slice(0, messageIndex), tempUserMessage]
+        };
+      } else {
+        // Normal new message
+        return {
+          ...prevChat,
+          messages: [...prevChat.messages, tempUserMessage]
+        };
+      }
     });
 
     try {
@@ -531,7 +582,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4">
             {chat?.messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageBubble 
+                key={message.id} 
+                message={message} 
+                onEditMessage={handleEditMessage}
+              />
             ))}
             
             {/* Streaming Message */}
@@ -555,7 +610,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
                         <Loader2 className="w-4 h-4 animate-spin" />
                       </div>
                       <span className="text-sm font-medium text-subtext1">
-                        {currentModel ? `${currentModel.split(':')[0]} is thinking...` : 'AI Assistant is thinking...'}
+                        {`Model is thinking...`}
                       </span>
                     </div>
                   </div>
@@ -576,6 +631,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
 
       {/* Input */}
       <div className="flex-shrink-0 p-4 border-t border-surface2 bg-surface1">
+        {editingMessageId && (
+          <div className="mb-2 p-2 bg-yellow/10 border border-yellow/20 rounded-md flex items-center justify-between">
+            <span className="text-sm text-yellow flex items-center">
+              <Edit2 className="w-3 h-3 mr-1" />
+              Editing message
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setEditingMessageId(null);
+                setInput('');
+              }}
+              className="h-6 w-6 p-0 hover:bg-yellow/20 text-yellow"
+              title="Cancel editing"
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
         <form onSubmit={handleSendMessage} className="flex space-x-2">
           <Input
             value={input}

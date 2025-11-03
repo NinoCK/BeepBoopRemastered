@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Settings, MessageSquare, Plus, Menu } from 'lucide-react';
@@ -11,6 +11,23 @@ interface HeaderBarProps {
 }
 
 const HeaderBar: React.FC<HeaderBarProps> = ({ onNewChat, onToggleSidebar }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const handleSettingsClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (location.pathname === '/settings') {
+      // If already on settings page, navigate back to previous page
+      // If no history exists, navigate to home
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/');
+      }
+    } else {
+      navigate('/settings');
+    }
+  };
   return (
     <header className="flex items-center justify-between p-4 header-bar shadow-lg">
       <div className="flex items-center space-x-4">
@@ -52,15 +69,14 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onNewChat, onToggleSidebar }) => 
           New Chat
         </Button>
         
-        <Link to="/settings">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            className="text-text hover:text-accent hover:bg-surface2"
-          >
-            <Settings className="w-4 h-4" />
-          </Button>
-        </Link>
+        <Button 
+          variant="ghost" 
+          size="sm"
+          className="text-text hover:text-accent hover:bg-surface2"
+          onClick={handleSettingsClick}
+        >
+          <Settings className="w-4 h-4" />
+        </Button>
       </div>
     </header>
   );
