@@ -1,10 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { User, Bot, Clock, ChevronDown, ChevronRight, Brain } from 'lucide-react';
-import CodeBlock from './CodeBlock';
-import { parseCodeBlocks } from '../utils/parseCodeBlocks';
+import { User, Bot, Clock, ChevronDown, ChevronRight, Brain, Copy, Check, Edit2 } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface Message {
   id?: number;
@@ -20,12 +19,14 @@ interface Message {
 
 interface MessageBubbleProps {
   message: Message;
+  onEditMessage?: (messageId: number, newContent: string) => void;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onEditMessage }) => {
   const isUser = message.sender === 'user';
   const isSystem = message.sender === 'system';
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   const hasThinking = message.metadata?.has_thinking && message.metadata?.thinking;
   
@@ -37,11 +38,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     }
     return 'AI Assistant';
   };
-
-  // Parse message content for code blocks
-  const messageSegments = useMemo(() => {
-    return parseCodeBlocks(message.content);
-  }, [message.content]);
 
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
@@ -73,6 +69,23 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         return 'bg-yellow text-base';
       default:
         return 'bg-surface2 text-text';
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleEdit = () => {
+    if (onEditMessage && message.id) {
+      // This will trigger editing mode in parent
+      onEditMessage(message.id, message.content);
     }
   };
 
@@ -141,31 +154,47 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         )}
 
         {/* Main Message Content - constrained width */}
-        <Card className={`p-4 w-auto max-w-full ${
-          isUser 
-            ? 'bg-blue/10 border-blue/20' 
-            : 'bg-surface1 border-surface2'
-        }`}>
-          <div className="prose prose-sm max-w-none text-text message-bubble-content">
-            {messageSegments.map((segment, index) => {
-              if (segment.type === 'code') {
-                return (
-                  <CodeBlock
-                    key={`code-${index}`}
-                    code={segment.code}
-                    language={segment.language}
-                  />
-                );
-              } else {
-                return (
-                  <p key={`text-${index}`} className="whitespace-pre-wrap break-words m-0 mb-2 last:mb-0">
-                    {segment.content}
-                  </p>
-                );
-              }
-            })}
+        <div className="relative group w-auto max-w-full">
+          <Card className={`p-4 w-auto max-w-full ${
+            isUser 
+              ? 'bg-blue/10 border-blue/20' 
+              : 'bg-surface1 border-surface2'
+          }`}>
+            <div className="message-bubble-content">
+              <MarkdownRenderer content={message.content} />
+            </div>
+          </Card>
+          
+          {/* Action buttons - shown on hover */}
+          <div className={`absolute ${isUser ? 'left-2 top-2' : 'right-2 top-2'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10`}>
+            {!isUser && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopy}
+                className="h-7 w-7 p-0 bg-surface2/90 hover:bg-surface2 border border-surface2 text-text hover:text-accent"
+                title="Copy response"
+              >
+                {copied ? (
+                  <Check className="w-3.5 h-3.5" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </Button>
+            )}
+            {isUser && onEditMessage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleEdit}
+                className="h-7 w-7 p-0 bg-blue/20 hover:bg-blue/30 border border-blue/30 text-blue"
+                title="Edit message"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

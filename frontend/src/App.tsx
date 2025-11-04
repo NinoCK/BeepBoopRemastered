@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
+import Dashboard from './pages/Dashboard';
 import HeaderBar from './components/HeaderBar';
 import ChatSidebar from './components/ChatSidebar';
 import TerminalPanel from './components/TerminalPanel';
@@ -172,6 +173,7 @@ const AppContent: React.FC = () => {
             <Route path="/" element={<Chat />} />
             <Route path="/chat/:id" element={<Chat />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/dashboard" element={<Dashboard />} />
           </Routes>
         </main>
       </div>

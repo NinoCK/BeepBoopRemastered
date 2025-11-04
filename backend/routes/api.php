@@ -4,6 +4,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\RAGController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\ModelController;
+use App\Http\Controllers\ShortcutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -46,6 +47,14 @@ Route::prefix('models')->group(function () {
     Route::delete('/delete', [ModelController::class, 'deleteModel']);
     Route::post('/info', [ModelController::class, 'getModelInfo']);
     Route::get('/status', [ModelController::class, 'getServiceStatus']);
+});
+
+// Shortcut routes
+Route::prefix('shortcuts')->group(function () {
+    Route::get('/', [ShortcutController::class, 'index']);
+    Route::post('/', [ShortcutController::class, 'create']);
+    Route::put('/{id}', [ShortcutController::class, 'update']);
+    Route::delete('/{id}', [ShortcutController::class, 'destroy']);
 });
 
 // Test routes

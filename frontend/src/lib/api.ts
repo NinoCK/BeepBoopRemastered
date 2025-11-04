@@ -151,4 +151,35 @@ api.interceptors.response.use(
   }
 );
 
+// Shortcut API methods
+export interface Shortcut {
+  id: number;
+  name: string;
+  url: string;
+  icon: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const shortcutsApi = {
+  getAll: async (): Promise<Shortcut[]> => {
+    const response = await api.get('/shortcuts');
+    return response.data;
+  },
+  
+  create: async (data: { name: string; url: string; icon?: string }): Promise<Shortcut> => {
+    const response = await api.post('/shortcuts', data);
+    return response.data;
+  },
+  
+  update: async (id: number, data: { name?: string; url?: string; icon?: string }): Promise<Shortcut> => {
+    const response = await api.put(`/shortcuts/${id}`, data);
+    return response.data;
+  },
+  
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/shortcuts/${id}`);
+  },
+};
+
 export default api;

@@ -7,11 +7,11 @@
   /* Shadcn/ui default variables */
   --background: 222.2 84% 4.9%;
   --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
+  --card: 236 14.8% 18.4%;
   --card-foreground: 210 40% 98%;
   --popover: 222.2 84% 4.9%;
   --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
+  --primary: 327.4 96.2% 69.4%;
   --primary-foreground: 222.2 84% 4.9%;
   --secondary: 217.2 32.6% 17.5%;
   --secondary-foreground: 210 40% 98%;
@@ -433,8 +433,10 @@ body {
   overflow-wrap: break-word;
   word-break: break-word;
   hyphens: auto;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Ensure bubbles wrap properly and respect container width */
@@ -454,12 +456,125 @@ body {
   
   .message-bubble-content {
     max-width: 100%;
+    width: 100%;
   }
   
-  /* Adjust max width on mobile */
+  /* Ensure code blocks work on mobile - account for parent padding */
+  .code-block-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+  }
+  
+  .code-block-scroll-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: scroll !important;
+    -webkit-overflow-scrolling: touch;
+    /* Reduce padding on mobile */
+    padding: 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Reduce header padding on mobile */
+  .code-block-wrapper > div:first-child {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  /* Make code content smaller on mobile */
+  .code-block-scroll-container pre,
+  .code-block-scroll-container pre code {
+    font-size: 0.75rem !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Ensure markdown content is constrained */
+  .markdown-content,
+  .message-bubble-content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Ensure code blocks inside markdown are properly constrained */
+  .markdown-content .code-block-wrapper,
+  .message-bubble-content .code-block-wrapper {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  
+  /* Adjust max width on mobile for message bubbles */
   .streaming-message > div,
   .mb-6 > div {
     max-width: 90% !important;
+  }
+  
+  /* Ensure Card component is constrained on mobile */
+  .p-4.w-auto.max-w-full {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* Extra small screens (very small phones) */
+@media (max-width: 480px) {
+  .code-block-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.25rem !important;
+    box-sizing: border-box !important;
+    /* Reduce border radius on very small screens */
+    border-radius: 0.375rem !important;
+  }
+  
+  .code-block-scroll-container {
+    padding: 0.375rem !important;
+    font-size: 0.6875rem !important; /* 11px */
+    line-height: 1.4 !important;
+  }
+  
+  .code-block-wrapper > div:first-child {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    font-size: 0.625rem !important;
+  }
+  
+  .code-block-wrapper > div:first-child span {
+    font-size: 0.625rem !important;
+  }
+  
+  .code-block-wrapper button {
+    height: 1.5rem !important;
+    padding: 0.25rem 0.375rem !important;
+    font-size: 0.625rem !important;
+  }
+  
+  /* Make code content even smaller on very small screens */
+  .code-block-scroll-container pre,
+  .code-block-scroll-container pre code {
+    font-size: 0.6875rem !important; /* 11px */
+    line-height: 1.4 !important;
+  }
+  
+  .p-4.w-auto.max-w-full {
+    padding: 0.5rem !important;
   }
 }
 
@@ -470,12 +585,7 @@ body {
   margin-left: 0;
 }
 
-/* Message content independence */
-.message-bubble-content {
-  width: auto;
-  min-width: fit-content;
-  max-width: 100%;
-}
+/* Message content independence - removed conflicting width: auto */
 
 @keyframes fadeInUp {
   from {
@@ -665,65 +775,200 @@ body {
   color: var(--subtext0);
 }
 
+/* Code block wrapper - ensures it fits within message bubble */
+.code-block-wrapper {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Prevent wrapper itself from overflowing */
+  overflow: visible;
+  position: relative;
+  /* Border is defined in component className - box-sizing ensures it's included in width */
+}
+
+/* Code block scroll container with invisible scrollbar that appears on hover/scroll */
+.code-block-scroll-container {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Background color matches the code block */
+  background-color: #282c34;
+  /* Padding is applied to the container, not the code content */
+  /* This prevents padding from adding to content width */
+  /* Enable smooth scrolling on touch devices */
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar by default */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar by default in WebKit browsers */
+.code-block-scroll-container::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.code-block-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-block-scroll-container::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+/* Show scrollbar on hover or when scrolling */
+.code-block-wrapper:hover .code-block-scroll-container::-webkit-scrollbar-thumb,
+.code-block-scroll-container:active::-webkit-scrollbar-thumb,
+.code-block-scroll-container:focus::-webkit-scrollbar-thumb {
+  background: var(--surface2);
+}
+
+.code-block-wrapper:hover .code-block-scroll-container::-webkit-scrollbar-thumb:hover,
+.code-block-scroll-container:active::-webkit-scrollbar-thumb:hover,
+.code-block-scroll-container:focus::-webkit-scrollbar-thumb:hover {
+  background: var(--overlay0);
+}
+
+/* Show scrollbar when container is scrolling (using JavaScript class) */
+.code-block-scroll-container.scrolling::-webkit-scrollbar-thumb {
+  background: var(--surface2);
+}
+
+.code-block-scroll-container.scrolling::-webkit-scrollbar-thumb:hover {
+  background: var(--overlay0);
+}
+
+/* Firefox scrollbar styling on hover */
+.code-block-wrapper:hover .code-block-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface2) transparent;
+}
+
+.code-block-scroll-container.scrolling {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface2) transparent;
+}
+
 /* Syntax highlighter overrides */
 .message-bubble-content pre {
   margin: 0 !important;
   padding: 0 !important;
   background: transparent !important;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .message-bubble-content pre code {
   font-family: "JetBrains Mono", monospace !important;
-  padding: 1rem !important;
+  /* Padding removed - handled by scroll container */
+  padding: 0 !important;
   display: block;
   overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: content-box;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Ensure syntax highlighter container respects parent width */
+.code-block-scroll-container pre {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-width: 0;
+  box-sizing: border-box;
+  /* Allow content to overflow horizontally for scrolling */
+  overflow: visible;
+}
 
-/* CSS Variables for our custom theme */
-:root {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 84% 4.9%;
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 224.3 76.3% 94.1%;
-  --radius: 0.5rem;
-  --mauve: #cba6f7;
-  --red: #f38ba8;
-  --yellow: #f9e2af;
-  --orange: #fab387;
-  --blue: #89b4fa;
-  --green: #94e2d5;
-  --lavender: #b4befe;
-  --text: #cdd6f4;
-  --subtext1: #bac2de;
-  --subtext0: #a6adc8;
-  --overlay2: #9399b2;
-  --overlay1: #7f849c;
-  --overlay0: #6c7086;
-  --surface2: #585b70;
-  --surface1: #45475a;
-  --surface0: #282936;
-  --base: #191a21;
-  --crust: #282b35;
-  --ai-accent: #fd65b6;
+.code-block-scroll-container pre code {
+  display: block;
+  white-space: pre;
+  /* Allow code to be wider than container for horizontal scrolling */
+  min-width: min-content;
+  max-width: none;
+  width: auto;
+}
+
+/* Additional markdown/prose styles */
+.markdown-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.markdown-content-text {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.markdown-content-text p:last-child {
+  margin-bottom: 0;
+}
+
+/* Ensure code blocks inside markdown content are properly constrained */
+.markdown-content .code-block-wrapper,
+.message-bubble-content .code-block-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Ensure Card component properly constrains its children */
+.p-4.w-auto.max-w-full {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  /* Don't hide overflow - let code blocks handle their own scrolling */
+  overflow: visible;
+}
+
+/* Ensure Card component in message bubbles contains its content */
+.message-bubble-content,
+.streaming-message .relative.group .p-4 {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* SyntaxHighlighter wrapper - allow it to expand for scrolling */
+.code-block-scroll-container > div {
+  display: block;
+  min-width: min-content;
+  width: auto;
+}
+
+/* SyntaxHighlighter creates a pre tag - ensure it can overflow */
+.code-block-scroll-container > div > pre {
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block;
+}
+
+/* The code tag inside pre should allow horizontal overflow */
+.code-block-scroll-container > div > pre > code {
+  display: block;
+  white-space: pre !important;
+  min-width: min-content;
+  max-width: none;
+  width: auto;
+  /* Ensure padding doesn't affect width calculation */
+  box-sizing: content-box;
+  /* Remove any padding from code element - padding is on container */
+  padding: 0 !important;
 }
 
 

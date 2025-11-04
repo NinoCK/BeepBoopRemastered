@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Settings, MessageSquare, Plus, Menu } from 'lucide-react';
+import { Settings, MessageSquare, Plus, Menu, LayoutDashboard } from 'lucide-react';
 import ModelSelector from './ModelSelector';
 
 interface HeaderBarProps {
@@ -26,6 +26,20 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onNewChat, onToggleSidebar }) => 
       }
     } else {
       navigate('/settings');
+    }
+  };
+
+  const handleDashboardClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (location.pathname === '/dashboard') {
+      // If already on dashboard, navigate back to previous page or home
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/');
+      }
+    } else {
+      navigate('/dashboard');
     }
   };
   return (
@@ -72,8 +86,19 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onNewChat, onToggleSidebar }) => 
         <Button 
           variant="ghost" 
           size="sm"
-          className="text-text hover:text-accent hover:bg-surface2"
+          className={`text-text hover:text-accent hover:bg-surface2 ${location.pathname === '/dashboard' ? 'bg-surface2 text-accent' : ''}`}
+          onClick={handleDashboardClick}
+          title="Dashboard"
+        >
+          <LayoutDashboard className="w-4 h-4" />
+        </Button>
+        
+        <Button 
+          variant="ghost" 
+          size="sm"
+          className={`text-text hover:text-accent hover:bg-surface2 ${location.pathname === '/settings' ? 'bg-surface2 text-accent' : ''}`}
           onClick={handleSettingsClick}
+          title="Settings"
         >
           <Settings className="w-4 h-4" />
         </Button>
