@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('url');
-            $table->string('icon')->nullable();
+            $table->text('icon')->nullable(); // Changed to text to support long URLs
             $table->timestamps();
         });
     }

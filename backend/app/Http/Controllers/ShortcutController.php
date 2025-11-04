@@ -43,7 +43,7 @@ class ShortcutController extends Controller
                         $fail('The URL must be a valid URL.');
                     }
                 }],
-                'icon' => 'nullable|string|max:100',
+                'icon' => 'nullable|string|max:1000',
             ]);
 
             if ($validator->fails()) {
@@ -59,10 +59,16 @@ class ShortcutController extends Controller
                 $url = 'https://' . $url;
             }
 
+            // Handle icon: use provided value, or null if empty
+            $icon = $request->icon;
+            if (empty($icon) || trim($icon) === '') {
+                $icon = null;
+            }
+
             $shortcut = Shortcut::create([
                 'name' => $request->name,
                 'url' => $url,
-                'icon' => $request->icon ?? 'Link',
+                'icon' => $icon,
             ]);
 
             return response()->json($shortcut, 201);
@@ -93,7 +99,7 @@ class ShortcutController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'url' => 'sometimes|required|url|max:500',
-            'icon' => 'nullable|string|max:100',
+            'icon' => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -103,7 +109,14 @@ class ShortcutController extends Controller
             ], 422);
         }
 
-        $shortcut->update($request->only(['name', 'url', 'icon']));
+        // Handle icon: use provided value, or null if empty
+        $updateData = $request->only(['name', 'url']);
+        if ($request->has('icon')) {
+            $icon = $request->icon;
+            $updateData['icon'] = (empty($icon) || trim($icon) === '') ? null : $icon;
+        }
+
+        $shortcut->update($updateData);
 
         return response()->json($shortcut);
     }

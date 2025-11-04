@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Bot, Brain, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
-import CodeBlock from './CodeBlock';
-import { parseCodeBlocks } from '../utils/parseCodeBlocks';
+import { Bot, Brain, ChevronDown, ChevronRight, Loader2, Copy, Check } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface StreamingMessageProps {
   thinkingContent: string;
@@ -23,6 +22,7 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
   const [displayedThinking, setDisplayedThinking] = useState('');
   const [displayedContent, setDisplayedContent] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Show thinking content immediately as it comes in during thinking
   useEffect(() => {
@@ -56,10 +56,15 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
   // Format model name: remove version tags for display (e.g., "llama2:7b" -> "llama2")
   const formattedModelName = modelName.includes(':') ? modelName.split(':')[0] : modelName;
 
-  // Parse displayed content for code blocks
-  const messageSegments = useMemo(() => {
-    return parseCodeBlocks(displayedContent);
-  }, [displayedContent]);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(displayedContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   return (
     <div className="flex justify-start mb-6 streaming-message">
@@ -93,7 +98,7 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
                 <div className="flex items-center space-x-2">
                   <Brain className={`w-4 h-4 text-accent ${isThinking ? 'brain-thinking' : ''}`} />
                   <span className="text-sm font-medium text-subtext1">
-                    {isThinking ? `${formattedModelName} is thinking...` : `${formattedModelName} thought process`}
+                    {isThinking ? `Model is thinking...` : `Model thought process`}
                   </span>
                   {isThinking && (
                     <Loader2 className="w-3 h-3 animate-spin text-accent" />
@@ -122,33 +127,35 @@ const StreamingMessageBubble: React.FC<StreamingMessageProps> = ({
 
         {/* Main Message Content - constrained width */}
         {(mainContent.length > 0 || !isThinking) && (
-          <Card className="p-4 bg-surface1 border-surface2 w-auto max-w-full">
-            <div className="prose prose-sm max-w-none text-text message-bubble-content">
-              {messageSegments.map((segment, index) => {
-                const isLastSegment = index === messageSegments.length - 1;
-                const isLastTextSegment = isLastSegment && segment.type === 'text';
-                
-                if (segment.type === 'code') {
-                  return (
-                    <CodeBlock
-                      key={`code-${index}`}
-                      code={segment.code}
-                      language={segment.language}
-                    />
-                  );
-                } else {
-                  return (
-                    <p key={`text-${index}`} className="whitespace-pre-wrap break-words m-0 mb-2 last:mb-0">
-                      {segment.content}
-                      {isLastTextSegment && !isComplete && !isThinking && (
-                        <span className="inline-block w-2 h-4 bg-accent ml-1 animate-pulse" />
-                      )}
-                    </p>
-                  );
-                }
-              })}
-            </div>
-          </Card>
+          <div className="relative group w-auto max-w-full">
+            <Card className="p-4 bg-surface1 border-surface2 w-auto max-w-full">
+              <div className="message-bubble-content">
+                <MarkdownRenderer content={displayedContent} />
+                {!isComplete && !isThinking && displayedContent.length > 0 && (
+                  <span className="inline-block w-2 h-4 bg-accent ml-1 animate-pulse" />
+                )}
+              </div>
+            </Card>
+            
+            {/* Copy button - shown on hover and when content is available */}
+            {displayedContent.length > 0 && (
+              <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 w-7 p-0 bg-surface2/90 hover:bg-surface2 border border-surface2 text-text hover:text-accent"
+                  title="Copy response"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Loading indicator when thinking and no content yet */}

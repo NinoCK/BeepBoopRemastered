@@ -154,16 +154,16 @@ const ShortcutDialog: React.FC<ShortcutDialogProps> = ({
 
             {/* Icon Field */}
             <div className="grid gap-2">
-              <Label htmlFor="icon">Icon Name (optional)</Label>
+              <Label htmlFor="icon">Icon (optional)</Label>
               <Input
                 id="icon"
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
-                placeholder="e.g., Link, Home, Settings"
+                placeholder="e.g., Link, Home, Settings or https://example.com/icon.png"
                 disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
-                Enter a Lucide icon name (e.g., Link, Home, Settings, Github). Leave empty for default.
+                Enter a Lucide icon name (e.g., Link, Home, Settings, Github) or an image URL (e.g., https://example.com/icon.png). Leave empty for default.
               </p>
             </div>
 

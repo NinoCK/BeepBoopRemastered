@@ -306,6 +306,7 @@ const Settings: React.FC = () => {
 
       addNotification({
         type: 'info',
+        title: 'Download Started',
         message: `Started downloading model: ${modelName}`,
       });
 
@@ -398,6 +399,7 @@ const Settings: React.FC = () => {
                   
                   addNotification({
                     type: 'success',
+                    title: 'Download Complete',
                     message: `Successfully downloaded model: ${modelName}`,
                   });
                   
@@ -430,6 +432,7 @@ const Settings: React.FC = () => {
                   
                   addNotification({
                     type: 'error',
+                    title: 'Download Failed',
                     message: `Failed to download ${modelName}: ${data.message}`,
                   });
                   
@@ -471,6 +474,7 @@ const Settings: React.FC = () => {
       
       addNotification({
         type: 'error',
+        title: 'Download Failed',
         message: `Failed to download ${modelName}: ${errorMessage}`,
       });
       
