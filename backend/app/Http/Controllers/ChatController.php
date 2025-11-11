@@ -9,7 +9,6 @@ use App\Services\RAGService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 
 class ChatController extends Controller
 {
@@ -23,11 +22,14 @@ class ChatController extends Controller
     }
 
     /**
-     * Get all chats
+     * Get all chats for the authenticated user
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $chats = Chat::with('latestMessage')
+        $user = $request->user();
+
+        $chats = $user->chats()
+            ->with('latestMessage')
             ->orderBy('updated_at', 'desc')
             ->get();
 
@@ -43,7 +45,7 @@ class ChatController extends Controller
             'title' => 'nullable|string|max:255',
         ]);
 
-        $chat = Chat::create([
+        $chat = $request->user()->chats()->create([
             'title' => $request->title ?? 'New Chat',
             'status' => 'active',
         ]);
@@ -54,11 +56,13 @@ class ChatController extends Controller
     /**
      * Get a specific chat with messages
      */
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        $chat = Chat::with(['messages' => function ($query) {
-            $query->orderBy('sent_at');
-        }])->find($id);
+        $chat = $request->user()->chats()
+            ->with(['messages' => function ($query) {
+                $query->orderBy('sent_at');
+            }])
+            ->find($id);
 
         if (!$chat) {
             return response()->json(['error' => 'Chat not found'], 404);
@@ -77,12 +81,17 @@ class ChatController extends Controller
             'chat_id' => 'required|exists:chats,id',
         ]);
 
+        $user = $request->user();
+
         try {
-            $chat = Chat::findOrFail($request->chat_id);
+            $chat = $user->chats()->findOrFail($request->chat_id);
+
+            $this->llmService->useModelForUser($user);
 
             // Save user message
             $userMessage = Message::create([
                 'chat_id' => $chat->id,
+                'user_id' => $user->id,
                 'sender' => 'user',
                 'content' => $request->message,
                 'sent_at' => now(),
@@ -101,7 +110,7 @@ class ChatController extends Controller
             }
 
             // Get RAG context from uploaded documents
-            $ragContext = $this->ragService->getRelevantContext($request->message, 5);
+            $ragContext = $this->ragService->getRelevantContext($user, $request->message, 5);
             if (!empty($ragContext)) {
                 // Prepend RAG context to chat context
                 $context = array_merge([
@@ -115,11 +124,12 @@ class ChatController extends Controller
             $responseData = $this->llmService->generateResponse($request->message, $context);
 
             // Get current model name
-            $currentModel = Cache::get('selected_model', config('llm.model', 'llama2'));
+            $currentModel = $this->llmService->getModel();
 
             // Save assistant message with thinking content and model name
             $assistantMessage = Message::create([
                 'chat_id' => $chat->id,
+                'user_id' => $user->id,
                 'sender' => 'assistant',
                 'content' => $responseData['content'],
                 'metadata' => [
@@ -166,12 +176,17 @@ class ChatController extends Controller
             'chat_id' => 'required|exists:chats,id',
         ]);
 
+        $user = $request->user();
+
         try {
-            $chat = Chat::findOrFail($request->chat_id);
+            $chat = $user->chats()->findOrFail($request->chat_id);
+
+            $this->llmService->useModelForUser($user);
 
             // Save user message
             $userMessage = Message::create([
                 'chat_id' => $chat->id,
+                'user_id' => $user->id,
                 'sender' => 'user',
                 'content' => $request->message,
                 'sent_at' => now(),
@@ -190,7 +205,7 @@ class ChatController extends Controller
             }
 
             // Get RAG context from uploaded documents
-            $ragContext = $this->ragService->getRelevantContext($request->message, 5);
+            $ragContext = $this->ragService->getRelevantContext($user, $request->message, 5);
             if (!empty($ragContext)) {
                 // Prepend RAG context to chat context
                 $context = array_merge([
@@ -200,7 +215,10 @@ class ChatController extends Controller
                 ], $context);
             }
 
-            return response()->stream(function () use ($request, $context, $chat, $userMessage) {
+            $currentModel = $this->llmService->getModel();
+            $userId = $user->id;
+
+            return response()->stream(function () use ($request, $context, $chat, $userMessage, $currentModel, $userId) {
                 $streamBody = $this->llmService->generateStreamingResponse($request->message, $context);
                 
                 if (!$streamBody) {
@@ -272,12 +290,10 @@ class ChatController extends Controller
 
                 // Save the final message
                 $responseData = $this->llmService->extractThinkingContent($fullResponse);
-                
-                // Get current model name
-                $currentModel = Cache::get('selected_model', config('llm.model', 'llama2'));
-                
+
                 $assistantMessage = Message::create([
                     'chat_id' => $chat->id,
+                    'user_id' => $userId,
                     'sender' => 'assistant',
                     'content' => $responseData['content'],
                     'metadata' => [
@@ -347,9 +363,9 @@ class ChatController extends Controller
     /**
      * Delete a chat
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
-        $chat = Chat::find($id);
+        $chat = $request->user()->chats()->find($id);
 
         if (!$chat) {
             return response()->json(['error' => 'Chat not found'], 404);

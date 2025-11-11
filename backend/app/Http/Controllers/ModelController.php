@@ -68,9 +68,12 @@ class ModelController extends Controller
     /**
      * Get currently selected model
      */
-    public function getCurrentModel(): JsonResponse
+    public function getCurrentModel(Request $request): JsonResponse
     {
-        $currentModel = Cache::get('selected_model', config('llm.model', 'llama2'));
+        $currentModel = Cache::get(
+            $this->userModelCacheKey($request->user()->id),
+            config('llm.model', 'llama2')
+        );
         
         return response()->json([
             'success' => true,
@@ -90,7 +93,11 @@ class ModelController extends Controller
         $modelName = $request->input('model');
         
         // Store in cache for immediate use
-        Cache::put('selected_model', $modelName, now()->addDays(30));
+        Cache::put(
+            $this->userModelCacheKey($request->user()->id),
+            $modelName,
+            now()->addDays(30)
+        );
         
         // Log the model change
         Log::info('Model changed', [
@@ -457,7 +464,10 @@ class ModelController extends Controller
         $modelName = $request->input('model');
 
         // Don't allow deleting the currently selected model
-        $currentModel = Cache::get('selected_model', config('llm.model'));
+        $currentModel = Cache::get(
+            $this->userModelCacheKey($request->user()->id),
+            config('llm.model')
+        );
         if ($modelName === $currentModel) {
             return response()->json([
                 'success' => false,
@@ -568,5 +578,13 @@ class ModelController extends Controller
                 'message' => 'Ollama service is not running'
             ], 503);
         }
+    }
+
+    /**
+     * Build cache key for storing a user's selected model
+     */
+    protected function userModelCacheKey(int $userId): string
+    {
+        return "user:{$userId}:selected_model";
     }
 }

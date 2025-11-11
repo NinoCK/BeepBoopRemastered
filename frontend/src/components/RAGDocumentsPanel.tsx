@@ -3,6 +3,7 @@ import { FileText, Upload, X, CheckCircle, AlertCircle, Loader2, ChevronUp } fro
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import api from '../lib/api';
+import { cn } from '../lib/utils';
 
 interface Document {
   id: number;
@@ -180,36 +181,34 @@ const RAGDocumentsPanel: React.FC<RAGDocumentsPanelProps> = ({ isOpen, onClose }
   const getStatusIcon = (status: Document['status']) => {
     switch (status) {
       case 'ready':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-green" />;
       case 'processing':
-        return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+        return <Loader2 className="w-4 h-4 text-blue animate-spin" />;
       case 'failed':
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
+        return <AlertCircle className="w-4 h-4 text-red" />;
       default:
         return null;
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity"
+        className={cn(
+          'fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity duration-300',
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        )}
         onClick={onClose}
       />
       
       {/* Panel - positioned at bottom, expanding upward */}
       <div
         ref={panelRef}
-        className="fixed left-4 right-4 max-w-md mx-auto z-50 transition-all duration-300 ease-out"
-        style={{
-          bottom: '6rem', // Position above input area
-          transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
-          opacity: isOpen ? 1 : 0,
-          pointerEvents: isOpen ? 'auto' : 'none',
-        }}
+        className={cn(
+          'fixed left-4 right-4 bottom-24 max-w-md mx-auto z-50 transform transition-all duration-300 ease-out',
+          isOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'
+        )}
       >
         <Card className="bg-surface1 border-surface2 shadow-xl max-h-[60vh] flex flex-col">
           {/* Header */}
@@ -274,7 +273,7 @@ const RAGDocumentsPanel: React.FC<RAGDocumentsPanelProps> = ({ isOpen, onClose }
               </div>
 
               {uploadError && (
-                <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-xs">
+                <div className="mt-3 p-2 bg-red/10 border border-red/20 rounded text-red text-xs">
                   {uploadError}
                 </div>
               )}
@@ -287,7 +286,7 @@ const RAGDocumentsPanel: React.FC<RAGDocumentsPanelProps> = ({ isOpen, onClose }
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between p-3 bg-surface0 rounded border border-surface2 hover:border-surface3 transition-colors"
+                    className="flex items-center justify-between p-3 bg-surface0 rounded border border-surface2 hover:border-overlay1 transition-colors"
                   >
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
                       {getStatusIcon(doc.status)}
@@ -302,7 +301,7 @@ const RAGDocumentsPanel: React.FC<RAGDocumentsPanelProps> = ({ isOpen, onClose }
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDelete(doc.id)}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10 ml-2 flex-shrink-0"
+                      className="text-red hover:text-red/80 hover:bg-red/10 ml-2 flex-shrink-0"
                     >
                       <X className="w-4 h-4" />
                     </Button>

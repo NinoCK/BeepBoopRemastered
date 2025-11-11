@@ -10,6 +10,7 @@ import RAGDocumentsPanel from './RAGDocumentsPanel';
 import { Send, Loader2, FileText, Search, Brain, X, Edit2 } from 'lucide-react';
 import api from '../lib/api';
 import { useAppLogging } from '../contexts/AppLoggingContext';
+import axios from 'axios';
 
 interface Message {
   id: number;
@@ -43,6 +44,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingThinking, setStreamingThinking] = useState('');
   const [streamingContent, setStreamingContent] = useState('');
@@ -88,6 +90,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
     
     try {
       setInitialLoading(true);
+      setChatError(null);
       addLog({
         level: 'info',
         category: 'api',
@@ -113,6 +116,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         source: 'ChatWindow',
         context: { chatId: currentChatId, error: error instanceof Error ? error.message : 'Unknown error' }
       });
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        setChat(null);
+        setChatError('This chat could not be found or you no longer have access to it.');
+      }
     } finally {
       setInitialLoading(false);
     }
@@ -507,6 +514,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatId, onMessagesUpdate }) => 
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-accent" />
           <p className="text-subtext1">Loading chat...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (chatError) {
+    return (
+      <div className="h-full flex items-center justify-center bg-surface0 overflow-hidden">
+        <div className="max-w-md text-center space-y-4 p-6">
+          <div className="w-16 h-16 bg-red/10 rounded-full flex items-center justify-center mx-auto">
+            <X className="w-8 h-8 text-red" />
+          </div>
+          <h2 className="text-2xl font-semibold text-text">Chat Unavailable</h2>
+          <p className="text-subtext1">{chatError}</p>
+          <p className="text-sm text-subtext0">
+            Select another chat from the sidebar or start a new conversation to continue.
+          </p>
         </div>
       </div>
     );

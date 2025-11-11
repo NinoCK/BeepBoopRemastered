@@ -12,7 +12,7 @@ interface CodeBlockProps {
 const CodeBlock: React.FC<CodeBlockProps> = ({ code, language = 'text' }) => {
   const [copied, setCopied] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -56,7 +56,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ code, language = 'text' }) => {
   }, []);
 
   return (
-    <div className="code-block-wrapper relative my-4 rounded-lg border border-surface2 bg-[#282c34] max-w-full">
+    <div className="code-block-wrapper relative my-4 rounded-lg border border-surface2 bg-code-block max-w-full">
       {/* Header with language and copy button */}
       <div className="flex items-center justify-between px-4 py-2 bg-surface2/50 border-b border-surface2">
         <span className="text-xs font-mono text-subtext0 uppercase">
