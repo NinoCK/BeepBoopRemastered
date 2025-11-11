@@ -1,75 +1,83 @@
 <?php
 
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\RAGController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\ModelController;
 use App\Http\Controllers\ShortcutController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+Route::prefix('auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login']);
 
-// Chat routes
-Route::prefix('chat')->group(function () {
-    Route::get('/', [ChatController::class, 'index']);
-    Route::post('/new', [ChatController::class, 'create']);
-    Route::get('/logs', [ChatController::class, 'logs']); // Move logs before {id} route
-    Route::get('/{id}', [ChatController::class, 'show']);
-    Route::delete('/{id}', [ChatController::class, 'destroy']);
-    Route::post('/', [ChatController::class, 'handle']);
-    Route::post('/stream', [ChatController::class, 'stream']);
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+    });
 });
 
-// RAG routes
-Route::prefix('rag')->group(function () {
-    Route::post('/upload', [RAGController::class, 'upload']);
-    Route::post('/query', [RAGController::class, 'query']);
-    Route::get('/documents', [RAGController::class, 'documents']);
-    Route::delete('/documents/{id}', [RAGController::class, 'destroy']);
-});
+Route::middleware('auth:sanctum')->group(function () {
+    // Chat routes
+    Route::prefix('chat')->group(function () {
+        Route::get('/', [ChatController::class, 'index']);
+        Route::post('/new', [ChatController::class, 'create']);
+        Route::get('/logs', [ChatController::class, 'logs']); // Move logs before {id} route
+        Route::get('/{id}', [ChatController::class, 'show']);
+        Route::delete('/{id}', [ChatController::class, 'destroy']);
+        Route::post('/', [ChatController::class, 'handle']);
+        Route::post('/stream', [ChatController::class, 'stream']);
+    });
 
-// Search routes
-Route::prefix('search')->group(function () {
-    Route::post('/', [SearchController::class, 'search']);
-    Route::get('/status', [SearchController::class, 'status']);
-});
+    // RAG routes
+    Route::prefix('rag')->group(function () {
+        Route::post('/upload', [RAGController::class, 'upload']);
+        Route::post('/query', [RAGController::class, 'query']);
+        Route::get('/documents', [RAGController::class, 'documents']);
+        Route::delete('/documents/{id}', [RAGController::class, 'destroy']);
+    });
 
-// Model management routes
-Route::prefix('models')->group(function () {
-    Route::get('/', [ModelController::class, 'listModels']);
-    Route::get('/current', [ModelController::class, 'getCurrentModel']);
-    Route::post('/current', [ModelController::class, 'setCurrentModel']);
-    Route::post('/pull', [ModelController::class, 'pullModel']);
-    Route::post('/pull/stream', [ModelController::class, 'streamPullModel']);
-    Route::delete('/delete', [ModelController::class, 'deleteModel']);
-    Route::post('/info', [ModelController::class, 'getModelInfo']);
-    Route::get('/status', [ModelController::class, 'getServiceStatus']);
-});
+    // Search routes
+    Route::prefix('search')->group(function () {
+        Route::post('/', [SearchController::class, 'search']);
+        Route::get('/status', [SearchController::class, 'status']);
+    });
 
-// Shortcut routes
-Route::prefix('shortcuts')->group(function () {
-    Route::get('/', [ShortcutController::class, 'index']);
-    Route::post('/', [ShortcutController::class, 'create']);
-    Route::put('/{id}', [ShortcutController::class, 'update']);
-    Route::delete('/{id}', [ShortcutController::class, 'destroy']);
-});
+    // Model management routes
+    Route::prefix('models')->group(function () {
+        Route::get('/', [ModelController::class, 'listModels']);
+        Route::get('/current', [ModelController::class, 'getCurrentModel']);
+        Route::post('/current', [ModelController::class, 'setCurrentModel']);
+        Route::post('/pull', [ModelController::class, 'pullModel']);
+        Route::post('/pull/stream', [ModelController::class, 'streamPullModel']);
+        Route::delete('/delete', [ModelController::class, 'deleteModel']);
+        Route::post('/info', [ModelController::class, 'getModelInfo']);
+        Route::get('/status', [ModelController::class, 'getServiceStatus']);
+    });
 
-// Test routes
-Route::get('/test', function () {
-    return response()->json([
-        'status' => 'ok',
-        'message' => 'API is working',
-        'timestamp' => now(),
-        'llm_model' => config('llm.model'),
-        'llm_endpoint' => config('llm.endpoint')
-    ]);
-});
+    // Shortcut routes
+    Route::prefix('shortcuts')->group(function () {
+        Route::get('/', [ShortcutController::class, 'index']);
+        Route::post('/', [ShortcutController::class, 'create']);
+        Route::put('/layout', [ShortcutController::class, 'updateLayout']);
+        Route::put('/{id}', [ShortcutController::class, 'update']);
+        Route::delete('/{id}', [ShortcutController::class, 'destroy']);
+    });
 
-// Test thinking route
-Route::post('/test/thinking', function () {
+    // Test routes
+    Route::get('/test', function () {
+        return response()->json([
+            'status' => 'ok',
+            'message' => 'API is working',
+            'timestamp' => now(),
+            'llm_model' => config('llm.model'),
+            'llm_endpoint' => config('llm.endpoint')
+        ]);
+    });
+
+    // Test thinking route
+    Route::post('/test/thinking', function () {
     return response()->stream(function () {
         // Simulate thinking
         echo "data: " . json_encode(['type' => 'thinking_start']) . "\n\n";
@@ -120,10 +128,10 @@ Route::post('/test/thinking', function () {
         'Connection' => 'keep-alive',
         'X-Accel-Buffering' => 'no'
     ]);
-});
+    });
 
-// Test regular thinking extraction
-Route::post('/test/extract', function () {
+    // Test regular thinking extraction
+    Route::post('/test/extract', function () {
     $testResponse = "<think>This is a test thinking process. Let me analyze this step by step: 1) First I need to understand the request, 2) Then formulate a response, 3) Finally provide a clear answer.</think>This is the main response after thinking about it carefully.";
     
     $llmService = app(\App\Services\LLMService::class);
@@ -134,10 +142,10 @@ Route::post('/test/extract', function () {
         'extracted' => $extracted,
         'thinking_found' => !is_null($extracted['thinking'])
     ]);
-});
+    });
 
-// Test problematic content from message 24
-Route::get('/test/problematic', function () {
+    // Test problematic content from message 24
+    Route::get('/test/problematic', function () {
     $problematicContent = '<think>
 Okay, so the user greeted me withhello again." I should respond in a friendly welcoming manner to keep the conversation going. Maybe can say something like, "Hello again!\'s up?" That sounds good because it acknowledges greeting and introduces myself while keeping things positive.
 </think>
@@ -157,10 +165,10 @@ Hello again! What\'s up?';
             'thinking_pattern' => preg_match('/<thinking>(.*?)<\/thinking>/s', $problematicContent),
         ]
     ]);
-});
+    });
 
-// Check actual message 24 content
-Route::get('/test/message24', function () {
+    // Check actual message 24 content
+    Route::get('/test/message24', function () {
     $message = \App\Models\Message::find(24);
     $llmService = app(\App\Services\LLMService::class);
     $extracted = $llmService->extractThinkingContent($message->content);
@@ -178,4 +186,5 @@ Route::get('/test/message24', function () {
             'thinking_pattern' => preg_match('/<thinking>(.*?)<\/thinking>/s', $message->content),
         ]
     ]);
+    });
 });

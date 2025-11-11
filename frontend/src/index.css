@@ -46,6 +46,8 @@
   --base: #191a21;
   --crust: #282b35;
   --ai-accent: #fd65b6;
+  --code-block: #282c34;
+  --code-block-surface: #1e1e1e;
 }
 
 * {
@@ -408,6 +410,85 @@ body {
   transform: rotate(180deg);
 }
 
+.auth-modal {
+  animation: authModalFade 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: opacity, transform;
+}
+
+.auth-modal-card {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+  animation: authModalFade 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.auth-modal-card-alert {
+  animation: authModalAlert 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-modal-content {
+  opacity: 0;
+  animation: authContentFade 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.8s forwards;
+  will-change: opacity, transform;
+}
+
+.auth-alert {
+  animation: authAlertSlideDown 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+.auth-input-active {
+  color: var(--text);
+}
+
+@keyframes authModalFade {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes authContentFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authAlertSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authModalAlert {
+  0% {
+    transform: translateY(-6px) scale(0.98);
+    box-shadow: 0 30px 60px rgba(253, 101, 182, 0.35);
+  }
+  50% {
+    transform: translateY(4px) scale(1.01);
+    box-shadow: 0 40px 70px rgba(137, 180, 250, 0.4);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+  }
+}
+
 .thinking-cursor {
   display: inline-block;
   width: 2px;
@@ -756,7 +837,7 @@ body {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--surface2);
-  background-color: #1e1e1e;
+  background-color: var(--code-block-surface);
 }
 
 .code-block-header {
@@ -794,7 +875,7 @@ body {
   max-width: 100%;
   box-sizing: border-box;
   /* Background color matches the code block */
-  background-color: #282c34;
+  background-color: var(--code-block);
   /* Padding is applied to the container, not the code content */
   /* This prevents padding from adding to content width */
   /* Enable smooth scrolling on touch devices */
@@ -802,6 +883,11 @@ body {
   /* Hide scrollbar by default */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
+}
+
+.text-fade-right {
+  mask-image: linear-gradient(to right, black 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 70%, transparent 100%);
 }
 
 /* Hide scrollbar by default in WebKit browsers */

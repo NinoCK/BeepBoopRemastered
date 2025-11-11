@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Chat extends Model
 {
     protected $fillable = [
+        'user_id',
         'title',
         'status',
         'metadata',
@@ -25,5 +27,10 @@ class Chat extends Model
     public function latestMessage()
     {
         return $this->hasOne(Message::class)->latestOfMany('sent_at');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

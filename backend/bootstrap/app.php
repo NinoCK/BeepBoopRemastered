@@ -16,8 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->use([
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
+
+        // Enable Sanctum stateful middleware and Sanctum-style API guards
+        $middleware->statefulApi();
         
-        // Disable CSRF for API routes
+        // Disable CSRF for API routes when using bearer tokens
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
