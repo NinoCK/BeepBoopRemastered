@@ -4,6 +4,7 @@
 The Personal AI Assistant is a local AI assistant web application inspired by Claude. It features a chat interface with context memory, Retrieval-Augmented Generation (RAG) capabilities, web search integration, and a terminal window for backend logs and AI inference information. The application is built using Laravel 12 for the backend and React with shadcn/ui for the frontend, styled with TailwindCSS.
 
 ## Features
+- **Secure Authentication**: Laravel Sanctum-powered registration, login, and logout with bearer tokens.
 - **Chat Interface**: A user-friendly chat window with smooth scrolling and message types (user, assistant, system).
 - **RAG (Retrieval-Augmented Generation)**: Document-anchored answers using uploaded PDFs or text files.
 - **Web Search Integration**: Real-time information retrieval from external search APIs.
@@ -105,6 +106,17 @@ personal-ai-assistant/
      ```
      npm run dev
      ```
+
+## Authentication
+- The application now starts at the `/login` route. Users must sign in before accessing any assistant features.
+- New users can self-register via the `/register` page, which issues a Sanctum personal access token automatically.
+- Backend API endpoints for authentication:
+  - `POST /api/auth/register` — create a new account and receive a bearer token.
+  - `POST /api/auth/login` — authenticate an existing user and receive a new bearer token.
+  - `GET /api/auth/me` — return the authenticated user.
+  - `POST /api/auth/logout` — revoke the current bearer token.
+- All existing assistant APIs under `/api/*` now require an `Authorization: Bearer <token>` header. Tokens are stored securely in the frontend and attached automatically by the API client.
+- Ensure your `.env` configuration allows CORS from the frontend origin (defaults cover `http://localhost:5173`).
 
 ### TailwindCSS Configuration
 - Update `tailwind.config.js` with custom colors and font settings.

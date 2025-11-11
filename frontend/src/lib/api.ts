@@ -3,10 +3,15 @@ import type { LogEntry } from '../contexts/AppLoggingContext';
 
 // Logger function that will be injected from React context
 let logger: ((log: Omit<LogEntry, 'id' | 'timestamp'>) => void) | null = null;
+let unauthorizedHandler: (() => void) | null = null;
 
 // Function to inject logger from React context
 export const setApiLogger = (logFn: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void) => {
   logger = logFn;
+};
+
+export const setUnauthorizedHandler = (handler: (() => void) | null) => {
+  unauthorizedHandler = handler;
 };
 
 // Helper to sanitize sensitive data
@@ -120,9 +125,7 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('auth_token');
-      // Redirect to login or handle as needed
+      unauthorizedHandler?.();
     }
     
     // Log API error (skip periodic status checks unless it's a network error)
@@ -154,11 +157,33 @@ api.interceptors.response.use(
 // Shortcut API methods
 export interface Shortcut {
   id: number;
-  name: string;
-  url: string;
+  name: string | null;
+  url: string | null;
   icon: string | null;
+  type?: 'shortcut' | 'widget'; // 'widget' for widgets, 'shortcut' (default) for regular shortcuts
+  widget_type?: 'clock' | 'weather'; // Only for widgets
+  settings?: string | null; // JSON string with widget settings
+  display_order?: number;
+  span_columns?: number;
+  span_rows?: number;
+  grid_column?: number;
+  grid_row?: number;
   created_at: string;
   updated_at: string;
+}
+
+// Widget settings interfaces
+export interface ClockWidgetSettings {
+  timeFormat: '12h' | '24h';
+  dateFormat: string; // Date format preset
+  size?: '1x1' | '2x2' | '1x2' | '2x1'; // Widget size
+}
+
+export interface WeatherWidgetSettings {
+  temperatureUnit: 'C' | 'F';
+  locationMethod: 'gps' | 'manual';
+  manualLocation?: string;
+  size?: '1x1' | '2x2' | '1x2' | '2x1'; // Widget size
 }
 
 export const shortcutsApi = {
@@ -167,18 +192,31 @@ export const shortcutsApi = {
     return response.data;
   },
   
-  create: async (data: { name: string; url: string; icon?: string }): Promise<Shortcut> => {
+  create: async (data: { name?: string | null; url?: string | null; icon?: string; type?: 'shortcut' | 'widget'; widget_type?: 'clock' | 'weather'; settings?: string }): Promise<Shortcut> => {
     const response = await api.post('/shortcuts', data);
     return response.data;
   },
   
-  update: async (id: number, data: { name?: string; url?: string; icon?: string }): Promise<Shortcut> => {
+  update: async (id: number, data: { name?: string | null; url?: string | null; icon?: string; type?: 'shortcut' | 'widget'; widget_type?: 'clock' | 'weather'; settings?: string }): Promise<Shortcut> => {
     const response = await api.put(`/shortcuts/${id}`, data);
     return response.data;
   },
   
   delete: async (id: number): Promise<void> => {
     await api.delete(`/shortcuts/${id}`);
+  },
+
+  updateLayout: async (
+    tiles: Array<{
+      id: number;
+      display_order: number;
+      span_columns?: number;
+      span_rows?: number;
+      grid_column?: number;
+      grid_row?: number;
+    }>
+  ): Promise<void> => {
+    await api.put('/shortcuts/layout', { tiles });
   },
 };
 

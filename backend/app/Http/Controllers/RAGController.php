@@ -27,7 +27,7 @@ class RAGController extends Controller
         ]);
 
         try {
-            $document = $this->ragService->uploadDocument($request->file('document'));
+            $document = $this->ragService->uploadDocument($request->user(), $request->file('document'));
 
             return response()->json([
                 'message' => 'Document uploaded successfully',
@@ -57,6 +57,7 @@ class RAGController extends Controller
 
         try {
             $response = $this->ragService->query(
+                $request->user(),
                 $request->query,
                 $request->limit ?? 5
             );
@@ -81,11 +82,13 @@ class RAGController extends Controller
     /**
      * Get all documents (including processing and failed ones)
      */
-    public function documents(): JsonResponse
+    public function documents(Request $request): JsonResponse
     {
         try {
             // Get all documents, not just ready ones
-            $documents = Document::orderBy('created_at', 'desc')->get();
+            $documents = Document::where('user_id', $request->user()->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             return response()->json([
                 'documents' => $documents,
@@ -105,10 +108,10 @@ class RAGController extends Controller
     /**
      * Delete a document
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         try {
-            $success = $this->ragService->deleteDocument($id);
+            $success = $this->ragService->deleteDocument($request->user(), $id);
 
             if (!$success) {
                 return response()->json(['error' => 'Document not found'], 404);

@@ -71,6 +71,8 @@ export default {
         base: "#191a21",
         crust: "#282b35",
         accent: "#fd65b6",
+        "code-block": "var(--code-block)",
+        "code-block-surface": "var(--code-block-surface)",
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class LLMService
 {
@@ -17,8 +19,27 @@ class LLMService
     {
         $this->client = new Client();
         $this->endpoint = config('llm.endpoint');
-        $this->model = \Illuminate\Support\Facades\Cache::get('selected_model', config('llm.model'));
+        $this->model = config('llm.model');
         $this->timeout = config('llm.timeout');
+    }
+
+    /**
+     * Override the model for the current request based on the authenticated user.
+     */
+    public function useModelForUser(User $user): void
+    {
+        $this->model = Cache::get(
+            $this->userModelCacheKey($user->id),
+            config('llm.model')
+        );
+    }
+
+    /**
+     * Get the model currently in use.
+     */
+    public function getModel(): string
+    {
+        return $this->model;
     }
 
     /**
@@ -224,5 +245,13 @@ class LLMService
             ]);
             return false;
         }
+    }
+
+    /**
+     * Build cache key for storing a user's selected model.
+     */
+    protected function userModelCacheKey(int $userId): string
+    {
+        return "user:{$userId}:selected_model";
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Document;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -24,12 +25,12 @@ class RAGService
     /**
      * Upload and process a document for RAG
      */
-    public function uploadDocument(UploadedFile $file): Document
+    public function uploadDocument(User $user, UploadedFile $file): Document
     {
         $filename = time() . '_' . $file->getClientOriginalName();
-        $path = $file->storeAs('documents', $filename);
+        $path = $file->storeAs("documents/{$user->id}", $filename);
 
-        $document = Document::create([
+        $document = $user->documents()->create([
             'name' => $file->getClientOriginalName(),
             'filename' => $filename,
             'mime_type' => $file->getMimeType(),
@@ -39,7 +40,7 @@ class RAGService
         ]);
 
         // Process the document asynchronously (in a real app, use queues)
-        $this->processDocument($document);
+        $this->processDocument($document, $user);
 
         return $document;
     }
@@ -47,9 +48,11 @@ class RAGService
     /**
      * Process a document to extract text and create chunks
      */
-    public function processDocument(Document $document): void
+    public function processDocument(Document $document, User $user): void
     {
         try {
+            $this->llmService->useModelForUser($user);
+
             $content = $this->extractTextContent($document);
             $chunks = $this->createTextChunks($content);
             $embeddings = $this->generateEmbeddings($chunks);
@@ -75,9 +78,9 @@ class RAGService
     /**
      * Query documents using RAG and return relevant context chunks
      */
-    public function getRelevantContext(string $query, int $limit = 5): array
+    public function getRelevantContext(User $user, string $query, int $limit = 5): array
     {
-        $chunks = $this->findRelevantChunks($query, $limit);
+        $chunks = $this->findRelevantChunks($user, $query, $limit);
         
         if (empty($chunks)) {
             return [];
@@ -95,9 +98,11 @@ class RAGService
     /**
      * Query documents using RAG
      */
-    public function query(string $query, int $limit = 5): string
+    public function query(User $user, string $query, int $limit = 5): string
     {
-        $context = $this->getRelevantContext($query, $limit);
+        $context = $this->getRelevantContext($user, $query, $limit);
+
+        $this->llmService->useModelForUser($user);
         
         if (empty($context)) {
             $response = $this->llmService->generateResponse($query);
@@ -112,9 +117,11 @@ class RAGService
      * Find relevant documents for a query
      * Returns relevant chunks from documents using keyword matching
      */
-    public function findRelevantChunks(string $query, int $limit = 5): array
+    public function findRelevantChunks(User $user, string $query, int $limit = 5): array
     {
-        $documents = Document::where('status', 'ready')->get();
+        $documents = Document::where('user_id', $user->id)
+            ->where('status', 'ready')
+            ->get();
         
         if ($documents->isEmpty()) {
             return [];
@@ -180,14 +187,16 @@ class RAGService
     /**
      * Find relevant documents for a query
      */
-    protected function findRelevantDocuments(string $query, int $limit = 5)
+    protected function findRelevantDocuments(User $user, string $query, int $limit = 5)
     {
         // Use chunk-based search for better relevance
-        $chunks = $this->findRelevantChunks($query, $limit);
+        $chunks = $this->findRelevantChunks($user, $query, $limit);
         
         // Group by document and get unique documents
         $documentIds = array_unique(array_column($chunks, 'document_id'));
-        $documents = Document::whereIn('id', $documentIds)->get();
+        $documents = Document::where('user_id', $user->id)
+            ->whereIn('id', $documentIds)
+            ->get();
         
         // Attach relevant chunks to documents
         foreach ($documents as $document) {
@@ -355,17 +364,20 @@ class RAGService
     /**
      * Get all ready documents
      */
-    public function getDocuments()
+    public function getDocuments(User $user)
     {
-        return Document::where('status', 'ready')->get();
+        return Document::where('user_id', $user->id)
+            ->where('status', 'ready')
+            ->get();
     }
 
     /**
      * Delete a document
      */
-    public function deleteDocument(int $documentId): bool
+    public function deleteDocument(User $user, int $documentId): bool
     {
-        $document = Document::find($documentId);
+        $document = Document::where('user_id', $user->id)
+            ->find($documentId);
         
         if (!$document) {
             return false;
